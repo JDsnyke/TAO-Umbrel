@@ -73,7 +73,7 @@ If your laptop is low on free space, you can build and push entirely on GitHub-h
 3. Optional repository variable (**Settings → Secrets and variables → Actions → Variables**):
    - `DOCKER_IMAGE`: full Docker Hub name, for example `myuser/tao-umbrel`.
 
-   Tag-triggered runs (`push` of git tags matching `v*`) use `DOCKER_IMAGE` when set; otherwise they default to **`{github-owner}/tao-umbrel`** (your GitHub username or org slug from the fork URL, not necessarily your Docker Hub username). Set `DOCKER_IMAGE` unless those match.
+   Tag-triggered runs (`push` of git tags matching `v*`) use `DOCKER_IMAGE` when set; otherwise they default to **`{github-owner}/tao-umbrel`** (your GitHub username or org slug from the fork URL, lowercased for Docker, not necessarily your Docker Hub username). Set `DOCKER_IMAGE` unless those match.
 
 4. Run either:
    - **Actions → Docker build and push → Run workflow** (optional overrides for image tag and `:latest`). If the workflow file only exists on `dev`, open **Use workflow from** and choose **`dev`** so GitHub loads that YAML.

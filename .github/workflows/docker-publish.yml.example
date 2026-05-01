@@ -1,0 +1,3 @@
+This file previously contained a copy of the Docker publish workflow.
+
+The active workflow is **`.github/workflows/docker-publish.yml`**. Use that file; this placeholder remains only so historical links stay valid.

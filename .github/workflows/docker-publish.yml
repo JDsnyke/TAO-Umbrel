@@ -1,0 +1,97 @@
+name: Docker build and push
+
+on:
+  workflow_dispatch:
+    inputs:
+      docker_image:
+        description: "Docker Hub image (e.g. myuser/tao-umbrel). Leave empty to use DOCKER_IMAGE repo variable or <owner>/tao-umbrel."
+        required: false
+        type: string
+        default: ""
+      version_tag:
+        description: "Image tag (e.g. 1.7.1)"
+        required: true
+        type: string
+        default: "1.7.1"
+      push_latest:
+        description: "Also push :latest pointing at this build"
+        required: false
+        type: boolean
+        default: true
+
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_IMAGE_REPO_VAR: ${{ vars.DOCKER_IMAGE }}
+      EVENT_INPUT_IMAGE: ${{ github.event.inputs.docker_image || '' }}
+      EVENT_INPUT_VERSION: ${{ github.event.inputs.version_tag || '' }}
+      EVENT_INPUT_LATEST: ${{ github.event.inputs.push_latest || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve image name and tags
+        id: meta
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            IMAGE_RAW="${EVENT_INPUT_IMAGE:-}"
+            VERSION="${EVENT_INPUT_VERSION:-}"
+            PUSH_LATEST="${EVENT_INPUT_LATEST:-true}"
+            case "$PUSH_LATEST" in
+              '' | false | False | FALSE | 0 ) PUSH_LATEST="false" ;;
+              * ) PUSH_LATEST="true" ;;
+            esac
+          else
+            IMAGE_RAW=""
+            VERSION="${GITHUB_REF_NAME#v}"
+            PUSH_LATEST="true"
+          fi
+
+          IMAGE_RAW="${IMAGE_RAW// }"
+
+          if [ -z "$IMAGE_RAW" ]; then
+            if [ -n "${DOCKER_IMAGE_REPO_VAR:-}" ]; then
+              IMAGE="${DOCKER_IMAGE_REPO_VAR}"
+            else
+              IMAGE="${GITHUB_REPOSITORY_OWNER}/tao-umbrel"
+            fi
+          else
+            IMAGE="$IMAGE_RAW"
+          fi
+
+          TAGS="${IMAGE}:${VERSION}"
+          if [ "$PUSH_LATEST" = "true" ]; then
+            TAGS="${TAGS},${IMAGE}:latest"
+          fi
+
+          echo "Computed tags (CSV): ${TAGS}"
+
+          echo "tags=${TAGS}" >> "${GITHUB_OUTPUT}"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

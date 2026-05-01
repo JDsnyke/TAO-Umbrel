@@ -1,13 +1,20 @@
 services:
   umbrel:
-    image: tao9317/tao-umbrel:latest
-
+    image: ${UMBREL_IMAGE:-your-dockerhub-user/tao-umbrel:1.7.1}
     container_name: umbrel
     pid: host
-    ports:
-      - "80:80"
+    privileged: true
+    network_mode: host
     volumes:
       - ./umbrel:/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - /dev:/dev
+      - /run/udev:/run/udev:ro
+      - /sys:/sys
+      - /lib/modules:/lib/modules:ro
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
     restart: always
     stop_grace_period: 1m

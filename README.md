@@ -1,108 +1,180 @@
 ![umbrelOS](https://github.com/user-attachments/assets/cabf8af7-51ce-45df-ad3a-a664cc91c610)
 
-# umbrelOS (Unofficial Docker Image)
+# TAO-Umbrel (Unofficial umbrelOS Docker Image)
 
-> ⚠️ **Important Notice: This is an unofficial Docker image!**  
-> This project is a modified version of **umbrelOS v1.5.0**, designed to run directly in a Docker container instead of as a host operating system.  
-> **It is not endorsed or supported by the Umbrel official team. Use at your own risk.**  
->
-> Official Umbrel website: <https://umbrel.com>  
-> GitHub Repository: <https://github.com/WK188/TAO-Umbrel>
+This repository packages umbrelOS `1.7.1` into a Docker image that can be self-published to your own Docker Hub repository.
 
----
+## Important notice
 
-# ⭐ umbrelOS  
-## A beautiful self-hosted home server OS
+- This is an unofficial container image and is not supported by the Umbrel team.
+- Base runtime starts from `tao9317/tao-umbrel:latest`, then upgrades umbreld/UI to `1.7.1`.
+- Linux host is required for full device passthrough support.
 
-Umbrel's vision is to let everyone enjoy the convenience of the cloud while maintaining full control over their data.
+## Why this update matters
 
-With Umbrel, you can easily deploy apps and services on a small home server, creating your own private cloud.
+umbrelOS `1.7` introduces:
 
----
+- Home screen shortcuts
+- Built-in text editor in Files
+- Advanced networking controls (hostname, DNS, static IP flow)
+- Folder sharing improvements for external drives
+- Files performance and UX improvements
 
-# 🚀 How to run this Docker image
+umbrelOS `1.7.1` additionally fixes a storage error issue shown after restart on some devices.
 
-This is a **containerized version of umbrelOS**. No need for bare-metal installation or virtual machines—just run it with Docker.
+## Host requirements
 
----
+- Linux Docker host (bare metal or VM)
+- Docker Engine with Compose plugin
+- Access to host devices for drive detection:
+  - `/dev`
+  - `/run/udev`
+  - `/sys`
+  - `/lib/modules` (read-only)
+- Privileged container runtime (required for format/mount flows in Files)
 
-## 1. Pull the image
+## Build and publish your own image
+
+1. Create local env file:
 
 ```bash
-docker pull tao9317/tao-umbrel:latest
+cp .env.local.example .env.local
 ```
 
----
+2. Load env vars:
 
-## 2. Run using Docker Compose (recommended)
+```bash
+set -a
+source .env.local
+set +a
+```
 
-> ❗ **Important:**  
-> UmbrelOS manages other Docker containers, so you must mount the host Docker socket and enable `pid: host`.
+3. Build and push:
 
-Create a `docker-compose.yml`:
+```bash
+./scripts/build-push.sh "${DOCKERHUB_USERNAME}/tao-umbrel" 1.7.1
+```
+
+If omitted, the script defaults to:
+
+- Image: `your-dockerhub-user/tao-umbrel`
+- Tag: `1.7.1` and `latest`
+
+## Publish via GitHub Actions (no local disk)
+
+If your laptop is low on free space, you can build and push entirely on GitHub-hosted runners (~14 GB ephemeral disk).
+
+1. Push this repository to GitHub.
+
+2. In the repo settings, add Actions secrets (**Settings → Secrets and variables → Actions**):
+   - `DOCKERHUB_USERNAME`
+   - `DOCKERHUB_TOKEN` (recommended: Docker Hub Access Token scoped to Docker Hub CLI)
+
+3. Optional repository variable (**Settings → Secrets and variables → Actions → Variables**):
+   - `DOCKER_IMAGE`: full Docker Hub name, for example `myuser/tao-umbrel`.
+
+   Tag-triggered runs (`push` of git tags matching `v*`) use `DOCKER_IMAGE` when set; otherwise they default to **`{github-owner}/tao-umbrel`** (your GitHub username or org slug from the fork URL, not necessarily your Docker Hub username). Set `DOCKER_IMAGE` unless those match.
+
+4. Run either:
+   - **Actions → Docker build and push → Run workflow** (optional overrides for image tag and `:latest`).
+   - Or push a semver tag:
+
+```bash
+git tag v1.7.1
+git push origin v1.7.1
+```
+
+The workflow builds `linux/amd64` only and caches layers via GitHub Actions cache to speed repeats.
+
+See also [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml).
+
+## Run with Docker Compose
+
+The included `docker-compose.yml` defaults to:
 
 ```yaml
-services:
-  umbrel:
-    image: tao9317/tao-umbrel:latest
-    container_name: umbrel
-    pid: host
-    ports:
-      - "80:80"
-    volumes:
-      # Persist Umbrel data
-      - ./umbrel:/data
-      # Allow Umbrel to control host Docker
-      - /var/run/docker.sock:/var/run/docker.sock
-    restart: always
-    stop_grace_period: 1m
+image: ${UMBREL_IMAGE:-your-dockerhub-user/tao-umbrel:1.7.1}
 ```
 
-Start the container:
+Start Umbrel:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
----
+Open Umbrel at:
 
-## 3. Access UmbrelOS
-
-Wait a few minutes for initialization, then visit:
-
-```
-http://<YOUR_HOST_IP>:80
+```text
+http://<YOUR_LINUX_HOST_IP>
 ```
 
-to access the UmbrelOS web interface.
+## Migration from `tao9317/tao-umbrel:latest`
 
----
+The persisted Umbrel state lives in `./umbrel` (mounted to `/data`).
 
-# ⚙️ Optional Environment Variables
+1. Stop current container:
+
+```bash
+docker compose down
+```
+
+2. Backup current data directory:
+
+```bash
+cp -a umbrel "umbrel.bak.$(date +%F)"
+```
+
+3. Point compose image to your new image tag using either:
+- `UMBREL_IMAGE` environment variable, or
+- direct edit in `docker-compose.yml`
+
+4. Pull and start:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+5. Watch startup logs:
+
+```bash
+docker logs -f umbrel
+```
+
+The migration helper only warns about legacy markers; umbreld performs real data migrations itself.
+
+## Device detection and Files behavior
+
+To allow Files to detect and manage local disks, this setup enables:
+
+- `privileged: true`
+- `network_mode: host`
+- host mounts for `/dev`, `/run/udev`, `/sys`
+
+Without these, external device detection, formatting, and network share workflows may fail.
+
+## Manual smoke checklist after upgrade
+
+- Fresh install: onboarding succeeds.
+- Existing `1.5.x` data: apps and data reappear after startup.
+- Files: USB disk appears in sidebar.
+- Files: USB format action works.
+- Files: built-in editor opens text files.
+- Files: network mount to NAS works.
+- Settings > Network: hostname/static-IP flow loads.
+- Settings > File Sharing: SMB share from folder can be browsed from another machine.
+- Home: shortcut creation works.
+- Backups: can target external drive and run at least one backup.
+- Restart test: no false storage error screen on reboot.
+
+## Optional environment variables
 
 | Variable | Default | Description |
-|---------|--------|------|
-| `TZ` | `Etc/UTC` | Container timezone, e.g., `Asia/Shanghai` |
-| `UMBREL_DEBUG` | `false` | Enable debug logs for troubleshooting |
-| `UMBREL_DATA_DIR` | `/data` | Mounted Umbrel data directory |
-| `UMBREL_PORT` | `80` | Web UI port |
+| --- | --- | --- |
+| `UMBREL_IMAGE` | `your-dockerhub-user/tao-umbrel:1.7.1` | Image tag consumed by Compose |
+| `UMBREL_DATA_DIR` | `/data` | Data directory inside container |
+| `TZ` | `Etc/UTC` | Container timezone |
 
-> Add more variables if needed.
+## License
 
----
-
-
-
-# 📜 License
-
-UmbrelOS is licensed under **PolyForm Noncommercial 1.0.0**.
-
-**TL;DR:**
-
-- Free for **personal** and **non-commercial** use, modification, and redistribution.  
-- Commercial use is prohibited.  
-- This Docker image is subject to the same license.
-
----
-
-Thanks for using! Feedback and suggestions are welcome! 🔥
+UmbrelOS is licensed under `PolyForm Noncommercial 1.0.0`. This image remains subject to the same license terms.

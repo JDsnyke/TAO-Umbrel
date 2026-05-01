@@ -14,10 +14,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN git clone --depth 1 --branch "${UMBREL_VERSION}" https://github.com/getumbrel/umbrel /src
 
 WORKDIR /src/packages/ui
-RUN npm ci && npm run build
+RUN npm ci || npm install
+RUN npm run build
 
 WORKDIR /src/packages/umbreld
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev || npm install --omit=dev
 
 
 FROM tao9317/tao-umbrel:latest AS final

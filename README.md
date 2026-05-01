@@ -76,13 +76,15 @@ If your laptop is low on free space, you can build and push entirely on GitHub-h
    Tag-triggered runs (`push` of git tags matching `v*`) use `DOCKER_IMAGE` when set; otherwise they default to **`{github-owner}/tao-umbrel`** (your GitHub username or org slug from the fork URL, not necessarily your Docker Hub username). Set `DOCKER_IMAGE` unless those match.
 
 4. Run either:
-   - **Actions → Docker build and push → Run workflow** (optional overrides for image tag and `:latest`).
+   - **Actions → Docker build and push → Run workflow** (optional overrides for image tag and `:latest`). If the workflow file only exists on `dev`, open **Use workflow from** and choose **`dev`** so GitHub loads that YAML.
    - Or push a semver tag:
 
 ```bash
 git tag v1.7.1
 git push origin v1.7.1
 ```
+
+**Dev branch:** Pushes to `dev` that change the Docker image, helper scripts, or this workflow file trigger a build automatically. Those runs push **`your-image:dev-<7-char-sha>`** and do **not** move `:latest` (that stays for tag or manual runs that opt in).
 
 The workflow builds `linux/amd64` only and caches layers via GitHub Actions cache to speed repeats.
 

@@ -19,7 +19,16 @@ on:
         type: boolean
         default: true
 
+  # Branch: validate CI on dev without merging to default branch.
+  # Tag: semver releases remain v*-prefixed.
   push:
+    branches:
+      - dev
+    paths:
+      - "Dockerfile"
+      - "docker/**"
+      - "scripts/**"
+      - ".github/workflows/docker-publish.yml"
     tags:
       - "v*"
 
@@ -31,6 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DOCKER_IMAGE_REPO_VAR: ${{ vars.DOCKER_IMAGE }}
+      REF_TYPE_EVENT: ${{ github.ref_type }}
       EVENT_INPUT_IMAGE: ${{ github.event.inputs.docker_image || '' }}
       EVENT_INPUT_VERSION: ${{ github.event.inputs.version_tag || '' }}
       EVENT_INPUT_LATEST: ${{ github.event.inputs.push_latest || '' }}
@@ -53,10 +63,22 @@ jobs:
               '' | false | False | FALSE | 0 ) PUSH_LATEST="false" ;;
               * ) PUSH_LATEST="true" ;;
             esac
-          else
+          elif [ "${GITHUB_EVENT_NAME}" = "push" ]; then
             IMAGE_RAW=""
-            VERSION="${GITHUB_REF_NAME#v}"
-            PUSH_LATEST="true"
+            if [ "${REF_TYPE_EVENT:-}" = "tag" ]; then
+              VERSION="${GITHUB_REF_NAME#v}"
+              PUSH_LATEST="true"
+            elif [ "${REF_TYPE_EVENT:-}" = "branch" ]; then
+              SHORT_SHA="$(printf '%s' "${GITHUB_SHA:-}" | cut -c1-7)"
+              VERSION="dev-${SHORT_SHA}"
+              PUSH_LATEST="false"
+            else
+              echo "ERROR: Unexpected ref type for push: ${REF_TYPE_EVENT:-unset}"
+              exit 1
+            fi
+          else
+            echo "ERROR: Unexpected event: ${GITHUB_EVENT_NAME}"
+            exit 1
           fi
 
           IMAGE_RAW="${IMAGE_RAW// }"

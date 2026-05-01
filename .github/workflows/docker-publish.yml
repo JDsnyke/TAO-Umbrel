@@ -48,7 +48,7 @@ jobs:
       EVENT_INPUT_LATEST: ${{ github.event.inputs.push_latest || '' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4

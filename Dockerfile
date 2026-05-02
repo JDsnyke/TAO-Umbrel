@@ -13,12 +13,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN git clone --depth 1 --branch "${UMBREL_VERSION}" https://github.com/getumbrel/umbrel /src
 
+# Install umbreld (including devDeps) before UI build: Vite resolves shared TS that pulls in
+# packages/umbreld/tsconfig.json, which extends @tsconfig/node22 (a umbreld devDependency).
+WORKDIR /src/packages/umbreld
+RUN npm ci || npm install
+
 WORKDIR /src/packages/ui
 RUN npm ci || npm install
 RUN npm run build
 
+# Runtime umbreld needs production deps only (smaller COPY into final image).
 WORKDIR /src/packages/umbreld
-RUN npm ci --omit=dev || npm install --omit=dev
+RUN rm -rf node_modules && (npm ci --omit=dev || npm install --omit=dev)
 
 
 FROM tao9317/tao-umbrel:latest AS final

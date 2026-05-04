@@ -1,4 +1,5 @@
 name: Docker build and push
+# Pushes to `DOCKER_IMAGE` (repo variable), e.g. shurikan117/tao-umbrel, when GitHub owner != Hub namespace.
 
 on:
   workflow_dispatch:

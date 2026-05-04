@@ -57,8 +57,10 @@ set +a
 
 If omitted, the script defaults to:
 
-- Image: `your-dockerhub-user/tao-umbrel`
+- Image: `shurikan117/tao-umbrel`
 - Tag: `1.7.1` and `latest`
+
+(Fork maintainers: replace with your Docker Hub namespace everywhere you see `shurikan117`.)
 
 ## Publish via GitHub Actions (no local disk)
 
@@ -67,13 +69,15 @@ If your laptop is low on free space, you can build and push entirely on GitHub-h
 1. Push this repository to GitHub.
 
 2. In the repo settings, add Actions secrets (**Settings → Secrets and variables → Actions**):
-   - `DOCKERHUB_USERNAME`
-   - `DOCKERHUB_TOKEN` (recommended: Docker Hub Access Token scoped to Docker Hub CLI)
+   - **`DOCKERHUB_USERNAME`**: must equal the Docker Hub account that can **push** to your image (for this fork: **`shurikan117`**).
+   - **`DOCKERHUB_TOKEN`**: a Docker Hub **access token** with **Read, Write & Delete** (or equivalent push) scopes—not a read-only PAT.
 
-3. Optional repository variable (**Settings → Secrets and variables → Actions → Variables**):
-   - `DOCKER_IMAGE`: full Docker Hub name, for example `myuser/tao-umbrel`.
+   If `DOCKERHUB_USERNAME` and the token belong to different accounts, or the PAT is read-only, pushes fail with errors like **`insufficient_scope`** or **`push access denied`**.
 
-   Tag-triggered runs (`push` of git tags matching `v*`) use `DOCKER_IMAGE` when set; otherwise they default to **`{github-owner}/tao-umbrel`** (your GitHub username or org slug from the fork URL, lowercased for Docker, not necessarily your Docker Hub username). Set `DOCKER_IMAGE` unless those match.
+3. Repository variable (**Settings → Secrets and variables → Actions → Variables**):
+   - **`DOCKER_IMAGE`**: full Docker Hub name **`shurikan117/tao-umbrel`** (required when your GitHub owner slug differs from your Docker Hub namespace).
+
+   Tag-triggered and dev-branch CI runs read `DOCKER_IMAGE` when set; otherwise they fall back to **`{github-owner}/tao-umbrel`** (GitHub slug, lowercased), which is wrong for forks where the Hub repo lives under another user.
 
 4. Run either:
    - **Actions → Docker build and push → Run workflow** (optional overrides for image tag and `:latest`). If the workflow file only exists on `dev`, open **Use workflow from** and choose **`dev`** so GitHub loads that YAML.
@@ -84,7 +88,7 @@ git tag v1.7.1
 git push origin v1.7.1
 ```
 
-**Dev branch:** Pushes to `dev` that change the Docker image, helper scripts, or this workflow file trigger a build automatically. Those runs push **`your-image:dev-<7-char-sha>`** and do **not** move `:latest` (that stays for tag or manual runs that opt in).
+**Dev branch:** Pushes to `dev` that change the Docker image, helper scripts, or this workflow file trigger a build automatically. Those runs push **`shurikan117/tao-umbrel:dev-<7-char-sha>`** (when `DOCKER_IMAGE` is set) and do **not** move `:latest` (that stays for tag or manual runs that opt in).
 
 The workflow builds `linux/amd64` only and caches layers via GitHub Actions cache to speed repeats.
 
@@ -95,7 +99,7 @@ See also [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publi
 The included `docker-compose.yml` defaults to:
 
 ```yaml
-image: ${UMBREL_IMAGE:-your-dockerhub-user/tao-umbrel:1.7.1}
+image: ${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.1}
 ```
 
 Start Umbrel:
@@ -173,7 +177,7 @@ Without these, external device detection, formatting, and network share workflow
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `UMBREL_IMAGE` | `your-dockerhub-user/tao-umbrel:1.7.1` | Image tag consumed by Compose |
+| `UMBREL_IMAGE` | `shurikan117/tao-umbrel:1.7.1` | Image tag consumed by Compose |
 | `UMBREL_DATA_DIR` | `/data` | Data directory inside container |
 | `TZ` | `Etc/UTC` | Container timezone |
 

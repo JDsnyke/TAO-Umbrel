@@ -12,4 +12,5 @@
 - `docker-compose.yml` targets Linux hosts: privileged runtime, host networking, and bind mounts including `/dev`, `/run/udev`, `/sys`, and `/lib/modules` for Umbrel Files and external drive flows.
 - Active workflow `.github/workflows/docker-publish.yml` builds/pushes `linux/amd64`; pushes to branch `dev` that touch Dockerfile, `docker/`, `scripts/`, or this workflow emit an image tag `dev-<short-sha>` and do not promote `:latest` from those runs; semver releases use pushed tags matching `v*`.
 - Resolved Docker image names are lowercased in CI (Docker rejects uppercase repository namespaces); overrides use repo variable `DOCKER_IMAGE` when GitHub owner does not match the Docker Hub namespace.
+- Published image for this fork is **`shurikan117/tao-umbrel`**; set GitHub Actions variable `DOCKER_IMAGE` to that value when the GitHub repository owner differs from the Docker Hub namespace.
 - Workflow sets `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` and uses current major pins for checkout, Docker Buildx, login, and build-push Actions to align with Actions Node deprecation timelines.

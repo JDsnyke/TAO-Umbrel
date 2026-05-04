@@ -1,6 +1,6 @@
 services:
   umbrel:
-    image: ${UMBREL_IMAGE:-your-dockerhub-user/tao-umbrel:1.7.1}
+    image: ${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.1}
     container_name: umbrel
     pid: host
     privileged: true

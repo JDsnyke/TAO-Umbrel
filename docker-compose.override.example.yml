@@ -1,0 +1,19 @@
+# Merge pattern: copy to docker-compose.override.yml (gitignored).
+# Compose automatically merges docker-compose.yml + docker-compose.override.yml on `docker compose up`.
+#
+# Optional: set UMBREL_DATA in a project `.env` to change the host path for `…/kopia` (default `./umbrel/kopia`).
+#
+# SELinux (Fedora/RHEL): bind mounts sometimes need suffix :z or :Z on host paths (see Docker bind-mount SELinux docs).
+
+services:
+  umbrel:
+    volumes:
+      # umbreld hardcodes XDG_CACHE_HOME/XDG_CONFIG_HOME under /kopia (see backups module).
+      - ${UMBREL_DATA:-./umbrel}/kopia:/kopia
+
+      # --- Examples; uncomment paths that exist on your host ---
+      # NAS or extra backup target surfaced at same path inside the container:
+      # - /mnt/backups:/mnt/backups
+
+      # Moving `/data` requires editing the main `docker-compose.yml` volume for `./umbrel:/data`;
+      # this example only appends mounts (Compose merges volume lists).

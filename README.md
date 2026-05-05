@@ -102,6 +102,20 @@ The included `docker-compose.yml` defaults to:
 image: ${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.1}
 ```
 
+**Backups (Kopia)** — Published images dated before the Kopia change may lack the `kopia` binary inside the container. Until you pull a tag that includes it, validate backups using a **`dev-<sha>`** image from Actions or a **local build**.
+
+**Persist `/kopia` and add extra binds** — Docker Compose merges `docker-compose.yml` with **`docker-compose.override.yml`** automatically (no extra `-f`):
+
+```bash
+cp docker-compose.override.example.yml docker-compose.override.yml
+# Edit paths under `volumes`; optional: set `UMBREL_DATA` in a project `.env` file (see [.env.local.example](.env.local.example))
+docker compose up -d
+```
+
+`docker-compose.override.yml` is gitignored so host-specific paths stay local. Alternatively: `COMPOSE_FILE=docker-compose.yml:docker-compose.local.yml docker compose ...` merges files explicitly.
+
+SELinux enforcing hosts sometimes need `:z` or `:Z` on bind mount definitions. NFS-heavy backup targets may need extra host packages (`nfs-common`); SMB is aligned with existing `cifs-utils`. Attached USB/external-drive backups assume a **Linux** Docker host—not Docker Desktop on macOS.
+
 Start Umbrel:
 
 ```bash
@@ -178,7 +192,10 @@ Without these, external device detection, formatting, and network share workflow
 | Variable | Default | Description |
 | --- | --- | --- |
 | `UMBREL_IMAGE` | `shurikan117/tao-umbrel:1.7.1` | Image tag consumed by Compose |
+| `UMBREL_DATA` | `./umbrel` | Host path prefix for `…/kopia:/kopia` in [docker-compose.override.example.yml](docker-compose.override.example.yml) |
 | `UMBREL_DATA_DIR` | `/data` | Data directory inside container |
+| `COMPOSE_FILE` | _(unset)_ | Colon-separated list of Compose files if not using `docker-compose.override.yml` |
+| `UMBRELD_RESTORE_SKIP_REBOOT` | _(unset)_ | Upstream umbreld: restore flow without reboot for debugging |
 | `TZ` | `Etc/UTC` | Container timezone |
 
 ## License

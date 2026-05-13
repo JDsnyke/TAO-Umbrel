@@ -66,6 +66,8 @@ If omitted, the script defaults to:
 
 If your laptop is low on free space, you can build and push entirely on GitHub-hosted runners (~14 GB ephemeral disk).
 
+**Docker Hub tags:** Pushes to the **`dev`** branch only publish **`dev-<7-char-sha>`** (the suffix is the start of the git commit SHA in hex, for example `dev-1313073`). That is not the Umbrel version. To publish a **semver** tag such as **`1.7.3`** on Docker Hub (and optionally **`latest`**), either push a **`v*` git tag** (see step 4 below) or run **Actions → Docker build and push → Run workflow** and set **`version_tag`** to **`1.7.3`**.
+
 1. Push this repository to GitHub.
 
 2. In the repo settings, add Actions secrets (**Settings → Secrets and variables → Actions**):

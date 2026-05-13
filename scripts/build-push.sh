@@ -2,7 +2,7 @@
 set -euo pipefail
 
 IMAGE="${1:-${UMBREL_IMAGE:-shurikan117/tao-umbrel}}"
-TAG="${2:-1.7.1}"
+TAG="${2:-1.7.3}"
 MIN_FREE_GIB="${MIN_FREE_GIB:-18}"
 
 available_kb="$(df -Pk . | awk 'NR==2 {print $4}')"

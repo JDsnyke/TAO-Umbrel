@@ -10,10 +10,10 @@ on:
         type: string
         default: ""
       version_tag:
-        description: "Image tag (e.g. 1.7.1)"
+        description: "Image tag (e.g. 1.7.3)"
         required: true
         type: string
-        default: "1.7.1"
+        default: "1.7.3"
       push_latest:
         description: "Also push :latest pointing at this build"
         required: false
@@ -108,6 +108,15 @@ jobs:
 
           echo "tags=${TAGS}" >> "${GITHUB_OUTPUT}"
 
+          # Align git clone with image tag: use workflow/tag VERSION, else Dockerfile default (dev-* builds).
+          first_umbrel_default="$(grep -m1 '^ARG UMBREL_VERSION=' Dockerfile | cut -d= -f2- || true)"
+          if [[ "${VERSION}" == dev-* ]]; then
+            umbrel_for_build="${first_umbrel_default}"
+          else
+            umbrel_for_build="${VERSION}"
+          fi
+          echo "umbrel_version_build=${umbrel_for_build}" >> "${GITHUB_OUTPUT}"
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
         with:
@@ -121,5 +130,7 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            UMBREL_VERSION=${{ steps.meta.outputs.umbrel_version_build }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

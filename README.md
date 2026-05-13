@@ -2,12 +2,12 @@
 
 # TAO-Umbrel (Unofficial umbrelOS Docker Image)
 
-This repository packages umbrelOS `1.7.1` into a Docker image that can be self-published to your own Docker Hub repository.
+This repository packages umbrelOS `1.7.3` into a Docker image that can be self-published to your own Docker Hub repository.
 
 ## Important notice
 
 - This is an unofficial container image and is not supported by the Umbrel team.
-- Base runtime starts from `tao9317/tao-umbrel:latest`, then upgrades umbreld/UI to `1.7.1`.
+- Base runtime starts from `tao9317/tao-umbrel:latest`, then upgrades umbreld/UI to `1.7.3`.
 - Linux host is required for full device passthrough support.
 
 ## Why this update matters
@@ -20,7 +20,7 @@ umbrelOS `1.7` introduces:
 - Folder sharing improvements for external drives
 - Files performance and UX improvements
 
-umbrelOS `1.7.1` additionally fixes a storage error issue shown after restart on some devices.
+umbrelOS `1.7.x` includes a fix for a storage error shown after restart on some devices. This image tracks upstream tag **`1.7.3`**; see [upstream `1.7.1`…`1.7.3` changes](https://github.com/getumbrel/umbrel/compare/1.7.1...1.7.3) for the full commit list.
 
 ## Host requirements
 
@@ -52,13 +52,13 @@ set +a
 3. Build and push:
 
 ```bash
-./scripts/build-push.sh "${DOCKERHUB_USERNAME}/tao-umbrel" 1.7.1
+./scripts/build-push.sh "${DOCKERHUB_USERNAME}/tao-umbrel" 1.7.3
 ```
 
 If omitted, the script defaults to:
 
 - Image: `shurikan117/tao-umbrel`
-- Tag: `1.7.1` and `latest`
+- Tag: `1.7.3` and `latest`
 
 (Fork maintainers: replace with your Docker Hub namespace everywhere you see `shurikan117`.)
 
@@ -84,13 +84,18 @@ If your laptop is low on free space, you can build and push entirely on GitHub-h
    - Or push a semver tag:
 
 ```bash
-git tag v1.7.1
-git push origin v1.7.1
+git tag v1.7.3
+git push origin v1.7.3
 ```
 
 **Dev branch:** Pushes to `dev` that change the Docker image, helper scripts, or this workflow file trigger a build automatically. Those runs push **`shurikan117/tao-umbrel:dev-<7-char-sha>`** (when `DOCKER_IMAGE` is set) and do **not** move `:latest` (that stays for tag or manual runs that opt in).
 
 The workflow builds `linux/amd64` only and caches layers via GitHub Actions cache to speed repeats.
+
+### Image tag vs Umbrel source
+
+- **Docker image tag** — What you set in Compose (`UMBREL_IMAGE`), in `workflow_dispatch` (`version_tag`), or when running `./scripts/build-push.sh … <tag>`. Example: `shurikan117/tao-umbrel:1.7.3`.
+- **Upstream clone** — The `getumbrel/umbrel` git tag used during `docker build` comes from Dockerfile `ARG UMBREL_VERSION` (default `1.7.3`). CI passes `UMBREL_VERSION` as a build-arg so release tags and manual workflow runs match the pulled sources. **Dev branch** builds (`dev-<sha>` image tags) use the default from the first `ARG UMBREL_VERSION=` line in the Dockerfile so the clone stays a real semver tag, not the dev image name.
 
 See also [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml).
 
@@ -99,7 +104,7 @@ See also [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publi
 The included `docker-compose.yml` defaults to:
 
 ```yaml
-image: ${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.1}
+image: ${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.3}
 ```
 
 **Backups (Kopia)** — Published images dated before the Kopia change may lack the `kopia` binary inside the container. Until you pull a tag that includes it, validate backups using a **`dev-<sha>`** image from Actions or a **local build**.
@@ -191,7 +196,7 @@ Without these, external device detection, formatting, and network share workflow
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `UMBREL_IMAGE` | `shurikan117/tao-umbrel:1.7.1` | Image tag consumed by Compose |
+| `UMBREL_IMAGE` | `shurikan117/tao-umbrel:1.7.3` | Image tag consumed by Compose |
 | `UMBREL_DATA` | `./umbrel` | Host path prefix for `…/kopia:/kopia` in [docker-compose.override.example.yml](docker-compose.override.example.yml) |
 | `UMBREL_DATA_DIR` | `/data` | Data directory inside container |
 | `COMPOSE_FILE` | _(unset)_ | Colon-separated list of Compose files if not using `docker-compose.override.yml` |

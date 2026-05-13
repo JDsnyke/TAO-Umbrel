@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.3-container.0
+
+### Base update
+- Upgraded Umbrel payload from upstream tag `1.7.1` to **`1.7.3`** ([compare](https://github.com/getumbrel/umbrel/compare/1.7.1...1.7.3)).
+- Default Docker Hub example / Compose image tag is **`shurikan117/tao-umbrel:1.7.3`** (namespace unchanged).
+
+### Container/runtime changes
+- Pinned builder image to **`node:22.13.0-bookworm`** to match upstream umbrelOS Node line.
+- GitHub Actions passes **`UMBREL_VERSION`** as a Docker build-arg for tag and manual runs so image labels match the cloned Umbrel revision; dev-branch builds use the Dockerfile default.
+
 ## 1.7.1-container.0
 
 ### Base update

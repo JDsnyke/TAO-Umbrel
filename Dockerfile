@@ -1,6 +1,6 @@
-FROM node:22-bookworm AS builder
+FROM node:22.13.0-bookworm AS builder
 
-ARG UMBREL_VERSION=1.7.1
+ARG UMBREL_VERSION=1.7.3
 
 WORKDIR /src
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -29,8 +29,8 @@ RUN rm -rf node_modules && (npm ci --omit=dev || npm install --omit=dev)
 
 FROM tao9317/tao-umbrel:latest AS final
 
-ARG UMBREL_VERSION=1.7.1
-# Matches getumbrel/umbrel 1.7.1 packages/os/umbrelos.Dockerfile (bump KOPIA_* when upgrading UMBREL_VERSION).
+ARG UMBREL_VERSION=1.7.3
+# Matches getumbrel/umbrel 1.7.3 packages/os/umbrelos.Dockerfile (bump KOPIA_* when upgrading UMBREL_VERSION).
 ARG TARGETARCH=amd64
 ARG KOPIA_VERSION=0.19.0
 ARG KOPIA_SHA256_amd64=c07843822c82ec752e5ee749774a18820b858215aabd7da448ce665b9b9107aa
@@ -78,7 +78,7 @@ RUN if ! command -v node >/dev/null 2>&1 || ! node -e "process.exit(Number(proce
 COPY docker/inspect-base.sh /usr/local/bin/inspect-base.sh
 RUN chmod +x /usr/local/bin/inspect-base.sh && /usr/local/bin/inspect-base.sh
 
-# Replace bundled umbreld and UI assets with upstream 1.7.1.
+# Replace bundled umbreld and UI assets with upstream 1.7.3.
 RUN rm -rf /opt/umbreld /usr/lib/umbreld /opt/umbrel 2>/dev/null || true
 COPY --from=builder /src/packages/umbreld /opt/umbreld
 COPY --from=builder /src/packages/ui/dist /opt/umbreld/ui

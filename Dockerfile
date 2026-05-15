@@ -90,7 +90,8 @@ RUN mkdir -p /usr/lib /opt/umbrel \
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY docker/migrate.sh /usr/local/bin/migrate.sh
 COPY docker/rugix-ctrl-stub.sh /usr/local/bin/rugix-ctrl
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/migrate.sh /usr/local/bin/rugix-ctrl
+COPY docker/systemctl-stub.sh /usr/local/bin/systemctl
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/migrate.sh /usr/local/bin/rugix-ctrl /usr/local/bin/systemctl
 
 ENV UMBREL_VERSION=${UMBREL_VERSION}
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -15,6 +15,7 @@
 - Pinned builder image to **`node:22.13.0-bookworm`** to match upstream umbrelOS Node line.
 - GitHub Actions passes **`UMBREL_VERSION`** as a Docker build-arg for tag and manual runs so image labels match the cloned Umbrel revision; dev-branch builds use the Dockerfile default.
 - No-op **`rugix-ctrl`** at **`/usr/local/bin/rugix-ctrl`** so umbreld does not fail with **`spawn rugix-ctrl ENOENT`** on plain Docker (real Rugix exists only on umbrelOS).
+- No-op **`systemctl`** at **`/usr/local/bin/systemctl`** so shutdown **`systemctl stop smbd` / `wsdd2`** does not **`ENOENT`** in minimal Docker (no systemd).
 
 ## 1.7.1-container.0
 

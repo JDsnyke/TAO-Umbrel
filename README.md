@@ -133,6 +133,8 @@ Stop / remove: `docker stop umbrel && docker rm umbrel`
 - **`lstat '/data/umbrel-os'`** or **`scandir '/run/rugix/mounts/data/state'`** — The entrypoint and [`docker/migrate.sh`](docker/migrate.sh) create these stubs on each start. If you still see the errors, your local image is **older than those scripts**: `docker pull shurikan117/tao-umbrel:1.7.3` (or rebuild). As a one-off on the host: `mkdir -p /mnt/user/appdata/umbrel/umbrel-os`.
 - **`LNXSYSTM:00` … `/sys` read-only** — Harmless on many Docker hosts. If other failures pile up, try adding **`--privileged`** (trades away minimal security posture).
 - **`dataDirectory` shows a host path** — Umbreld may log the **source** of the `/data` bind mount; that is normal when you mount `/mnt/user/appdata/umbrel:/data`.
+- **`[umbreld] Received SIGTERM` right after startup** — Usually **not** an Umbrel bug. Typical causes: **`docker run` without `-d`** (foreground: closing SSH, **Ctrl+C**, or Unraid UI ending the session sends SIGTERM); Unraid template/script stopping the job; or a duplicate **`--name`**. Fix: run with **`-d`** and **`--stop-timeout 60`**, then check **`docker ps`** (should show **Up**). Follow logs in another shell: **`docker logs -f umbrel`**.
+- **`systemctl stop smbd` / `wsdd2` ENOENT** — Seen on **shutdown** when there is no systemd in the container. **Expected** in minimal Docker; safe to ignore unless SMB is misbehaving during normal use. Newer images include a no-op **`systemctl`** in **`/usr/local/bin`** to quiet these lines.
 
 ## Run with Docker Compose
 

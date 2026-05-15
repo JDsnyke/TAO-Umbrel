@@ -3,6 +3,7 @@
 ## 1.7.3-container.0
 
 ### Compose
+- Branch **`dev`** CI now pushes a **single moving** Hub tag **`dev`** (no `dev-<sha>` suffix); use **`docker pull`** to pick up the latest digest. Semver / manual workflows unchanged.
 - Default [`docker-compose.yml`](docker-compose.yml) is **minimal** (original [WK188/TAO-Umbrel](https://github.com/WK188/TAO-Umbrel) style): `UMBREL_DATA_HOST` → `/data`, Docker socket, `UMBREL_HTTP_PORT` → host port 80; no privileged / host network / device binds by default.
 - Added [`docker-compose.full-host.example.yml`](docker-compose.full-host.example.yml) for optional **full umbrelOS parity** (merge via `COMPOSE_FILE` when Files USB/block workflows are needed).
 - [`docker-compose.override.example.yml`](docker-compose.override.example.yml) uses **`UMBREL_DATA_HOST`** for the `/kopia` bind (aligned with main compose).

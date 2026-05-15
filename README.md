@@ -64,7 +64,7 @@ If omitted, the script defaults to:
 
 If your laptop is low on free space, you can build and push entirely on GitHub-hosted runners (~14 GB ephemeral disk).
 
-**Docker Hub tags:** Pushes to the **`dev`** branch only publish **`dev-<7-char-sha>`** (the suffix is the start of the git commit SHA in hex, for example `dev-1313073`). That is not the Umbrel version. To publish a **semver** tag such as **`1.7.3`** on Docker Hub (and optionally **`latest`**), either push a **`v*` git tag** (see step 4 below) or run **Actions → Docker build and push → Run workflow** and set **`version_tag`** to **`1.7.3`**.
+**Docker Hub tags:** Pushes to the **`dev`** branch publish a **moving** tag **`dev`** (same name every time; **`docker pull`** to refresh the digest after CI). That tag is not the Umbrel version. To publish a **semver** tag such as **`1.7.3`** on Docker Hub (and optionally **`latest`**), either push a **`v*` git tag** (see step 4 below) or run **Actions → Docker build and push → Run workflow** and set **`version_tag`** to **`1.7.3`**.
 
 1. Push this repository to GitHub.
 
@@ -88,14 +88,14 @@ git tag v1.7.3
 git push origin v1.7.3
 ```
 
-**Dev branch:** Pushes to `dev` that change the Docker image, helper scripts, or this workflow file trigger a build automatically. Those runs push **`shurikan117/tao-umbrel:dev-<7-char-sha>`** (when `DOCKER_IMAGE` is set) and do **not** move `:latest` (that stays for tag or manual runs that opt in).
+**Dev branch:** Pushes to `dev` that change the Docker image, helper scripts, or this workflow file trigger a build automatically. Those runs push **`shurikan117/tao-umbrel:dev`** (when `DOCKER_IMAGE` is set) and do **not** move `:latest` (that stays for tag or manual runs that opt in).
 
 The workflow builds `linux/amd64` only and caches layers via GitHub Actions cache to speed repeats.
 
 ### Image tag vs Umbrel source
 
 - **Docker image tag** — What you set in Compose (`UMBREL_IMAGE`), in `workflow_dispatch` (`version_tag`), or when running `./scripts/build-push.sh … <tag>`. Example: `shurikan117/tao-umbrel:1.7.3`.
-- **Upstream clone** — The `getumbrel/umbrel` git tag used during `docker build` comes from Dockerfile `ARG UMBREL_VERSION` (default `1.7.3`). CI passes `UMBREL_VERSION` as a build-arg so release tags and manual workflow runs match the pulled sources. **Dev branch** builds (`dev-<sha>` image tags) use the default from the first `ARG UMBREL_VERSION=` line in the Dockerfile so the clone stays a real semver tag, not the dev image name.
+- **Upstream clone** — The `getumbrel/umbrel` git tag used during `docker build` comes from Dockerfile `ARG UMBREL_VERSION` (default `1.7.3`). CI passes `UMBREL_VERSION` as a build-arg so release tags and manual workflow runs match the pulled sources. **Dev branch** builds use the **`dev`** image tag but still pass **`UMBREL_VERSION`** from the first `ARG UMBREL_VERSION=` line in the Dockerfile so the clone stays a real semver tag, not the word `dev`.
 
 See also [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml).
 
@@ -129,7 +129,7 @@ Stop / remove: `docker stop umbrel && docker rm umbrel`
 
 ### Unraid / `docker run` troubleshooting
 
-- **`rugix-ctrl` ENOENT** — Umbreld calls Rugix tooling that exists only on real umbrelOS. Images **built from this repo** install a no-op **`rugix-ctrl`** in `/usr/local/bin` so startup can continue. **`docker pull`** the tag again after a rebuild, or use a fresh **`dev-<sha>`** image from CI.
+- **`rugix-ctrl` ENOENT** — Umbreld calls Rugix tooling that exists only on real umbrelOS. Images **built from this repo** install a no-op **`rugix-ctrl`** in `/usr/local/bin` so startup can continue. **`docker pull`** the **`dev`** or semver tag again after CI publishes so your host does not keep an old digest.
 - **`lstat '/data/umbrel-os'`** or **`scandir '/run/rugix/mounts/data/state'`** — The entrypoint and [`docker/migrate.sh`](docker/migrate.sh) create these stubs on each start. If you still see the errors, your local image is **older than those scripts**: `docker pull shurikan117/tao-umbrel:1.7.3` (or rebuild). As a one-off on the host: `mkdir -p /mnt/user/appdata/umbrel/umbrel-os`.
 - **`LNXSYSTM:00` … `/sys` read-only** — Harmless on many Docker hosts. If other failures pile up, try adding **`--privileged`** (trades away minimal security posture).
 - **`dataDirectory` shows a host path** — Umbreld may log the **source** of the `/data` bind mount; that is normal when you mount `/mnt/user/appdata/umbrel:/data`.
@@ -157,7 +157,7 @@ services:
 
 **Docker / Unraid (`/data` bind mount only)** — On bare-metal umbrelOS, `/data/umbrel-os` and Rugix state under `/run/rugix/...` already exist. In Docker you usually mount only app data at `/data`. The container creates stubs at startup: **`/run/rugix/mounts/data/state`** in [`docker/entrypoint.sh`](docker/entrypoint.sh), and **`${UMBREL_DATA_DIR:-/data}/umbrel-os`** in [`docker/migrate.sh`](docker/migrate.sh), so migrations (e.g. factory-reset backup cleanup) do not fail with `ENOENT` on those paths.
 
-**Backups (Kopia)** — Published images dated before the Kopia change may lack the `kopia` binary inside the container. Until you pull a tag that includes it, validate backups using a **`dev-<sha>`** image from Actions or a **local build**.
+**Backups (Kopia)** — Published images dated before the Kopia change may lack the `kopia` binary inside the container. Until you pull a tag that includes it, validate backups using the latest **`dev`** image from Actions (**`docker pull`**) or a **local build**.
 
 **Persist `/kopia` and add extra binds** — Docker Compose merges `docker-compose.yml` with **`docker-compose.override.yml`** automatically (no extra `-f`):
 

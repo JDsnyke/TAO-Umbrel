@@ -73,8 +73,7 @@ jobs:
               VERSION="${GITHUB_REF_NAME#v}"
               PUSH_LATEST="true"
             elif [ "${REF_TYPE_EVENT:-}" = "branch" ]; then
-              SHORT_SHA="$(printf '%s' "${GITHUB_SHA:-}" | cut -c1-7)"
-              VERSION="dev-${SHORT_SHA}"
+              VERSION="dev"
               PUSH_LATEST="false"
             else
               echo "ERROR: Unexpected ref type for push: ${REF_TYPE_EVENT:-unset}"
@@ -109,9 +108,9 @@ jobs:
 
           echo "tags=${TAGS}" >> "${GITHUB_OUTPUT}"
 
-          # Align git clone with image tag: use workflow/tag VERSION, else Dockerfile default (dev-* builds).
+          # Branch `dev` builds use image tag `dev` (moving); use Dockerfile UMBREL_VERSION for git clone (not `dev`).
           first_umbrel_default="$(grep -m1 '^ARG UMBREL_VERSION=' Dockerfile | cut -d= -f2- || true)"
-          if [[ "${VERSION}" == dev-* ]]; then
+          if [ "${VERSION}" = "dev" ] || [[ "${VERSION}" == dev-* ]]; then
             umbrel_for_build="${first_umbrel_default}"
           else
             umbrel_for_build="${VERSION}"

@@ -129,11 +129,14 @@ Stop / remove: `docker stop umbrel && docker rm umbrel`
 
 ### Unraid / `docker run` troubleshooting
 
+Example overrides only (not defaults): `export UMBREL_DATA_HOST=/mnt/user/appdata/umbrel` and `export UMBREL_HTTP_PORT=8088` when the host already uses port **80**.
+
+- **`Docker socket is missing`** — The container needs **`/var/run/docker.sock`** on the host mapped to the same path inside. Confirm with `docker inspect umbrel` (two mount lines). Unraid Docker UI: add a path mapping for the socket file, not only appdata → `/data`.
 - **`rugix-ctrl` ENOENT** — Umbreld calls Rugix tooling that exists only on real umbrelOS. Images **built from this repo** install a no-op **`rugix-ctrl`** in `/usr/local/bin` so startup can continue. **`docker pull`** the **`dev`** or semver tag again after CI publishes so your host does not keep an old digest.
 - **`lstat '/data/umbrel-os'`** or **`scandir '/run/rugix/mounts/data/state'`** — The entrypoint and [`docker/migrate.sh`](docker/migrate.sh) create these stubs on each start. If you still see the errors, your local image is **older than those scripts**: `docker pull shurikan117/tao-umbrel:1.7.3` (or rebuild). As a one-off on the host: `mkdir -p /mnt/user/appdata/umbrel/umbrel-os`.
 - **`LNXSYSTM:00` … `/sys` read-only** — Harmless on many Docker hosts. If other failures pile up, try adding **`--privileged`** (trades away minimal security posture).
 - **`dataDirectory` shows a host path** — Umbreld may log the **source** of the `/data` bind mount; that is normal when you mount `/mnt/user/appdata/umbrel:/data`.
-- **`[umbreld] Received SIGTERM` right after startup** — Usually **not** an Umbrel bug. Typical causes: **`docker run` without `-d`** (foreground: closing SSH, **Ctrl+C**, or Unraid UI ending the session sends SIGTERM); Unraid template/script stopping the job; or a duplicate **`--name`**. Fix: run with **`-d`** and **`--stop-timeout 60`**, then check **`docker ps`** (should show **Up**). Follow logs in another shell: **`docker logs -f umbrel`**.
+- **`[umbreld] Received SIGTERM` right after startup** — Usually **not** an Umbrel bug. Typical causes: **`docker run` without `-d`** (foreground: closing SSH, **Ctrl+C**, or Unraid UI ending the session sends SIGTERM); Unraid template/script stopping the job; or a duplicate **`--name`**. Fix: run with **`-d`**, **`--restart always`**, and **`--stop-timeout 60`**, then check **`docker ps`** (should show **Up**). **`--restart unless-stopped`** does not restart after **`docker stop`**—use **`docker start umbrel`** or prefer **`always`** like Compose. Follow logs in another shell: **`docker logs -f umbrel`**.
 - **`systemctl stop smbd` / `wsdd2` ENOENT** — Seen on **shutdown** when there is no systemd in the container. **Expected** in minimal Docker; safe to ignore unless SMB is misbehaving during normal use. Newer images include a no-op **`systemctl`** in **`/usr/local/bin`** to quiet these lines.
 
 ## Run with Docker Compose
@@ -185,44 +188,78 @@ http://<YOUR_HOST_IP>:${UMBREL_HTTP_PORT:-80}
 
 (If you did not set `UMBREL_HTTP_PORT`, use port **80**.)
 
-## Migration from `tao9317/tao-umbrel:latest`
+## Upgrade from WK188 / tao9317:latest
 
-The persisted Umbrel state lives under **`UMBREL_DATA_HOST`** (default **`./umbrel`** on the host, mounted to **`/data`**).
+Minimal upgrade: **same data path and ports you already use**, new image **`shurikan117/tao-umbrel:1.7.3`** (or your own Hub build). Defaults match [WK188/TAO-Umbrel](https://github.com/WK188/TAO-Umbrel) and [`docker-compose.yml`](docker-compose.yml)—set only what differs on your host.
 
-1. Stop current container:
+| Variable | Default | Role |
+| --- | --- | --- |
+| `UMBREL_IMAGE` | `shurikan117/tao-umbrel:1.7.3` | Image to pull/run (override for your namespace or tag) |
+| `UMBREL_DATA_HOST` | `./umbrel` | Host directory → `/data` (**keep your existing path** on upgrade) |
+| `UMBREL_HTTP_PORT` | `80` | Host port → container `80` |
+| Docker socket | *(required, fixed)* | `/var/run/docker.sock` → `/var/run/docker.sock` |
+
+**Upgrade rule:** Change **`UMBREL_IMAGE`** to the 1.7.3 build; leave **`UMBREL_DATA_HOST`** the same so apps and settings stay intact. Run **`docker pull`** before recreate so stubs (rugix, systemctl, Kopia) match this repo.
+
+**Log banner:** Startup may say `Starting umbrelOS for Docker v1.5.0` from the dockur base [`tao9317/tao-umbrel`](Dockerfile); **umbreld** should still log `Starting Umbrel v1.7.3`. That is expected, not a wrong image.
+
+1. Optional overrides (omit any line to use the default):
 
 ```bash
+export UMBREL_IMAGE="${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.3}"
+export UMBREL_DATA_HOST="${UMBREL_DATA_HOST:-./umbrel}"
+export UMBREL_HTTP_PORT="${UMBREL_HTTP_PORT:-80}"
+```
+
+2. Backup data, then stop the old container:
+
+```bash
+cp -a "${UMBREL_DATA_HOST}" "${UMBREL_DATA_HOST}.bak.$(date +%F)"
 docker compose down
+# or, if you use docker run: docker stop umbrel && docker rm umbrel
 ```
 
-If you use **`docker run`** instead: `docker stop umbrel && docker rm umbrel`
-
-2. Backup current data directory:
+3. Pull and start (**`docker run`**):
 
 ```bash
-cp -a umbrel "umbrel.bak.$(date +%F)"
+docker pull "${UMBREL_IMAGE}"
+
+docker run -d \
+  --name umbrel \
+  --pid host \
+  --restart always \
+  --stop-timeout 60 \
+  -p "${UMBREL_HTTP_PORT}:80" \
+  -v "${UMBREL_DATA_HOST}:/data" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  "${UMBREL_IMAGE}"
 ```
 
-3. Point compose image to your new image tag using either:
-- `UMBREL_IMAGE` environment variable, or
-- direct edit in `docker-compose.yml`
-
-4. Pull and start:
+**Compose equivalent** (if you already use Compose):
 
 ```bash
-docker compose pull
-docker compose up -d
+docker compose pull && docker compose up -d
 ```
 
-With **`docker run`**: `docker pull "${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.3}"` then run the **`docker run`** block from the **Run with `docker run` (minimal)** section above (stop/remove the old container first).
+4. Verify (about one minute):
 
-5. Watch startup logs:
+```bash
+docker inspect umbrel --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}'
+sleep 15 && docker ps --filter name=umbrel
+docker exec umbrel test -S /var/run/docker.sock && echo "socket OK"
+```
+
+Expect **two** volume lines (data + docker.sock) and **`Up`** in `docker ps`. Open `http://<YOUR_HOST_IP>:${UMBREL_HTTP_PORT}`.
+
+5. Logs:
 
 ```bash
 docker logs -f umbrel
 ```
 
-The migration helper warns about legacy markers and ensures an **`umbrel-os`** directory exists under the data mount; umbreld performs real data migrations itself.
+The migration helper warns about legacy markers and ensures **`umbrel-os`** exists under the data mount; umbreld runs data migrations itself.
+
+Published semver on Docker Hub: **`shurikan117/tao-umbrel:1.7.3`** (from git tag **`v1.7.3`** or manual workflow). For CI snapshots use **`dev`** and **`docker pull`** to refresh the digest.
 
 ## Full host parity (optional Files / disks)
 

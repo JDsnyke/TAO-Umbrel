@@ -28,6 +28,7 @@ on:
     paths:
       - "Dockerfile"
       - "docker/**"
+      - "docker-compose*.yml"
       - "scripts/**"
       - ".github/workflows/docker-publish.yml"
     tags:

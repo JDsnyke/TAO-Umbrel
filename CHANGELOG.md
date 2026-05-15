@@ -2,6 +2,11 @@
 
 ## 1.7.3-container.0
 
+### Compose
+- Default [`docker-compose.yml`](docker-compose.yml) is **minimal** (original [WK188/TAO-Umbrel](https://github.com/WK188/TAO-Umbrel) style): `UMBREL_DATA_HOST` → `/data`, Docker socket, `UMBREL_HTTP_PORT` → host port 80; no privileged / host network / device binds by default.
+- Added [`docker-compose.full-host.example.yml`](docker-compose.full-host.example.yml) for optional **full umbrelOS parity** (merge via `COMPOSE_FILE` when Files USB/block workflows are needed).
+- [`docker-compose.override.example.yml`](docker-compose.override.example.yml) uses **`UMBREL_DATA_HOST`** for the `/kopia` bind (aligned with main compose).
+
 ### Base update
 - Upgraded Umbrel payload from upstream tag `1.7.1` to **`1.7.3`** ([compare](https://github.com/getumbrel/umbrel/compare/1.7.1...1.7.3)).
 - Default Docker Hub example / Compose image tag is **`shurikan117/tao-umbrel:1.7.3`** (namespace unchanged).
@@ -9,6 +14,7 @@
 ### Container/runtime changes
 - Pinned builder image to **`node:22.13.0-bookworm`** to match upstream umbrelOS Node line.
 - GitHub Actions passes **`UMBREL_VERSION`** as a Docker build-arg for tag and manual runs so image labels match the cloned Umbrel revision; dev-branch builds use the Dockerfile default.
+- No-op **`rugix-ctrl`** at **`/usr/local/bin/rugix-ctrl`** so umbreld does not fail with **`spawn rugix-ctrl ENOENT`** on plain Docker (real Rugix exists only on umbrelOS).
 
 ## 1.7.1-container.0
 

@@ -3,18 +3,10 @@ services:
     image: ${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.3}
     container_name: umbrel
     pid: host
-    privileged: true
-    network_mode: host
+    ports:
+      - "${UMBREL_HTTP_PORT:-80}:80"
     volumes:
-      - ./umbrel:/data
+      - ${UMBREL_DATA_HOST:-./umbrel}:/data
       - /var/run/docker.sock:/var/run/docker.sock
-      - /dev:/dev
-      - /run/udev:/run/udev:ro
-      - /sys:/sys
-      - /lib/modules:/lib/modules:ro
-    cap_add:
-      - SYS_ADMIN
-    security_opt:
-      - apparmor:unconfined
     restart: always
     stop_grace_period: 1m

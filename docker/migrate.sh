@@ -10,6 +10,9 @@ if [ ! -d "$data_dir" ]; then
   exit 0
 fi
 
+# Stub umbrelOS data layout so umbreld migrations do not ENOENT on bind-mounted Docker data only.
+mkdir -p "${data_dir}/umbrel-os"
+
 # We never mutate user data here; umbreld performs schema migrations itself.
 legacy_markers=(
   "$data_dir/umbrel.pid"

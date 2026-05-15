@@ -8,7 +8,7 @@ This repository packages umbrelOS `1.7.3` into a Docker image that can be self-p
 
 - This is an unofficial container image and is not supported by the Umbrel team.
 - Base runtime starts from `tao9317/tao-umbrel:latest`, then upgrades umbreld/UI to `1.7.3`.
-- Linux host is required for full device passthrough support.
+- Default **Docker Compose** matches the original **[WK188/TAO-Umbrel](https://github.com/WK188/TAO-Umbrel)** layout: data volume, Docker socket, published HTTP port (`80` by default). **Full host parity** (privileged, host network, `/dev`, udev, etc.) is **opt-in** via [`docker-compose.full-host.example.yml`](docker-compose.full-host.example.yml) if you need Umbrel **Files** on raw USB/block devices like bare-metal umbrelOS.
 
 ## Why this update matters
 
@@ -24,14 +24,12 @@ umbrelOS `1.7.x` includes a fix for a storage error shown after restart on some 
 
 ## Host requirements
 
-- Linux Docker host (bare metal or VM)
-- Docker Engine with Compose plugin
-- Access to host devices for drive detection:
-  - `/dev`
-  - `/run/udev`
-  - `/sys`
-  - `/lib/modules` (read-only)
-- Privileged container runtime (required for format/mount flows in Files)
+- **Minimal (default compose)** — Linux (or any host that can run this Linux image) with Docker Engine + Compose plugin; bind mount for **`/data`**; access to **`/var/run/docker.sock`** if you use Umbrel-managed apps. Published HTTP defaults to host port **`80`** (override with **`UMBREL_HTTP_PORT`**, e.g. **`8088`** on Unraid when port 80 is in use).
+- **Full host parity (optional)** — Same as above, plus merge [`docker-compose.full-host.example.yml`](docker-compose.full-host.example.yml) for privileged mode, **`network_mode: host`**, and binds to **`/dev`**, **`/run/udev`**, **`/sys`**, **`/lib/modules`** when you need **Files** USB detection, formatting, and similar umbrelOS-on-hardware behavior.
+
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.full-host.example.yml docker compose up -d
+```
 
 ## Build and publish your own image
 
@@ -101,13 +99,61 @@ The workflow builds `linux/amd64` only and caches layers via GitHub Actions cach
 
 See also [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml).
 
+## Run with `docker run` (minimal)
+
+Same defaults as [`docker-compose.yml`](docker-compose.yml): data volume, Docker socket, published HTTP port, no privileged stack. Set **`UMBREL_IMAGE`**, **`UMBREL_DATA_HOST`**, and **`UMBREL_HTTP_PORT`** in your shell (or inline) as needed.
+
+```bash
+export UMBREL_IMAGE="${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.3}"
+export UMBREL_DATA_HOST="${UMBREL_DATA_HOST:-$PWD/umbrel}"
+export UMBREL_HTTP_PORT="${UMBREL_HTTP_PORT:-80}"
+
+docker run -d \
+  --name umbrel \
+  --pid host \
+  --restart always \
+  --stop-timeout 60 \
+  -p "${UMBREL_HTTP_PORT}:80" \
+  -v "${UMBREL_DATA_HOST}:/data" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  "${UMBREL_IMAGE}"
+```
+
+**Kopia persistence** — Add another bind if the host directory exists, e.g. `-v "${UMBREL_DATA_HOST}/kopia:/kopia"`.
+
+**Full host parity** (`--privileged`, `--network host`, `/dev`, udev, etc.) is easier to express with **Compose** and [`docker-compose.full-host.example.yml`](docker-compose.full-host.example.yml) than a long `docker run`; translate those YAML keys to extra `docker run` flags if you must run without Compose.
+
+Open Umbrel at `http://<YOUR_HOST_IP>:${UMBREL_HTTP_PORT}` (default port **80**).
+
+Stop / remove: `docker stop umbrel && docker rm umbrel`
+
+### Unraid / `docker run` troubleshooting
+
+- **`rugix-ctrl` ENOENT** — Umbreld calls Rugix tooling that exists only on real umbrelOS. Images **built from this repo** install a no-op **`rugix-ctrl`** in `/usr/local/bin` so startup can continue. **`docker pull`** the tag again after a rebuild, or use a fresh **`dev-<sha>`** image from CI.
+- **`lstat '/data/umbrel-os'`** or **`scandir '/run/rugix/mounts/data/state'`** — The entrypoint and [`docker/migrate.sh`](docker/migrate.sh) create these stubs on each start. If you still see the errors, your local image is **older than those scripts**: `docker pull shurikan117/tao-umbrel:1.7.3` (or rebuild). As a one-off on the host: `mkdir -p /mnt/user/appdata/umbrel/umbrel-os`.
+- **`LNXSYSTM:00` … `/sys` read-only** — Harmless on many Docker hosts. If other failures pile up, try adding **`--privileged`** (trades away minimal security posture).
+- **`dataDirectory` shows a host path** — Umbreld may log the **source** of the `/data` bind mount; that is normal when you mount `/mnt/user/appdata/umbrel:/data`.
+
 ## Run with Docker Compose
 
-The included `docker-compose.yml` defaults to:
+Alternatively, use **Docker Compose**. The default [`docker-compose.yml`](docker-compose.yml) matches the original **TAO-Umbrel** style (bridge networking, published port, no privileged device stack):
 
 ```yaml
-image: ${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.3}
+services:
+  umbrel:
+    image: ${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.3}
+    container_name: umbrel
+    pid: host
+    ports:
+      - "${UMBREL_HTTP_PORT:-80}:80"
+    volumes:
+      - ${UMBREL_DATA_HOST:-./umbrel}:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+    stop_grace_period: 1m
 ```
+
+**Docker / Unraid (`/data` bind mount only)** — On bare-metal umbrelOS, `/data/umbrel-os` and Rugix state under `/run/rugix/...` already exist. In Docker you usually mount only app data at `/data`. The container creates stubs at startup: **`/run/rugix/mounts/data/state`** in [`docker/entrypoint.sh`](docker/entrypoint.sh), and **`${UMBREL_DATA_DIR:-/data}/umbrel-os`** in [`docker/migrate.sh`](docker/migrate.sh), so migrations (e.g. factory-reset backup cleanup) do not fail with `ENOENT` on those paths.
 
 **Backups (Kopia)** — Published images dated before the Kopia change may lack the `kopia` binary inside the container. Until you pull a tag that includes it, validate backups using a **`dev-<sha>`** image from Actions or a **local build**.
 
@@ -115,13 +161,13 @@ image: ${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.3}
 
 ```bash
 cp docker-compose.override.example.yml docker-compose.override.yml
-# Edit paths under `volumes`; optional: set `UMBREL_DATA` in a project `.env` file (see [.env.local.example](.env.local.example))
+# Edit paths under `volumes`; optional: set `UMBREL_DATA_HOST` and `UMBREL_HTTP_PORT` in a project `.env` file (see [.env.local.example](.env.local.example))
 docker compose up -d
 ```
 
 `docker-compose.override.yml` is gitignored so host-specific paths stay local. Alternatively: `COMPOSE_FILE=docker-compose.yml:docker-compose.local.yml docker compose ...` merges files explicitly.
 
-SELinux enforcing hosts sometimes need `:z` or `:Z` on bind mount definitions. NFS-heavy backup targets may need extra host packages (`nfs-common`); SMB is aligned with existing `cifs-utils`. Attached USB/external-drive backups assume a **Linux** Docker host—not Docker Desktop on macOS.
+SELinux enforcing hosts sometimes need `:z` or `:Z` on bind mount definitions. NFS-heavy backup targets may need extra host packages (`nfs-common`); SMB is aligned with existing `cifs-utils` in the image. **Full-host compose** is better suited to attached USB / block-device workflows than the default minimal stack.
 
 Start Umbrel:
 
@@ -132,18 +178,22 @@ docker compose up -d
 Open Umbrel at:
 
 ```text
-http://<YOUR_LINUX_HOST_IP>
+http://<YOUR_HOST_IP>:${UMBREL_HTTP_PORT:-80}
 ```
+
+(If you did not set `UMBREL_HTTP_PORT`, use port **80**.)
 
 ## Migration from `tao9317/tao-umbrel:latest`
 
-The persisted Umbrel state lives in `./umbrel` (mounted to `/data`).
+The persisted Umbrel state lives under **`UMBREL_DATA_HOST`** (default **`./umbrel`** on the host, mounted to **`/data`**).
 
 1. Stop current container:
 
 ```bash
 docker compose down
 ```
+
+If you use **`docker run`** instead: `docker stop umbrel && docker rm umbrel`
 
 2. Backup current data directory:
 
@@ -162,36 +212,41 @@ docker compose pull
 docker compose up -d
 ```
 
+With **`docker run`**: `docker pull "${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.3}"` then run the **`docker run`** block from the **Run with `docker run` (minimal)** section above (stop/remove the old container first).
+
 5. Watch startup logs:
 
 ```bash
 docker logs -f umbrel
 ```
 
-The migration helper only warns about legacy markers; umbreld performs real data migrations itself.
+The migration helper warns about legacy markers and ensures an **`umbrel-os`** directory exists under the data mount; umbreld performs real data migrations itself.
 
-## Device detection and Files behavior
+## Full host parity (optional Files / disks)
 
-To allow Files to detect and manage local disks, this setup enables:
+The **default** compose does **not** mount **`/dev`**, **`/run/udev`**, **`/sys`**, or **`/lib/modules`**, and does **not** use **`privileged`** or **`network_mode: host`**. That matches the original **WK188/TAO-Umbrel** experience: simpler, fewer host integrations.
 
-- `privileged: true`
-- `network_mode: host`
-- host mounts for `/dev`, `/run/udev`, `/sys`
+To approximate **bare-metal umbrelOS** for **Files** (USB disks in the sidebar, format actions, etc.), merge [`docker-compose.full-host.example.yml`](docker-compose.full-host.example.yml):
 
-Without these, external device detection, formatting, and network share workflows may fail.
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.full-host.example.yml docker compose up -d
+```
+
+With **`network_mode: host`**, Umbrel listens on the host’s port **80** (and related ports) directly; the **`ports`** mapping from the base file is ignored at runtime. On **Unraid**, if the web UI already uses port **80**, use **minimal** compose with **`UMBREL_HTTP_PORT=8088`** instead, or move conflicting services off port 80.
+
+Without full-host merges, **USB block-device flows in Files** may not work; **network mounts**, **SMB to NAS paths**, and **most apps** can still work with the minimal stack.
 
 ## Manual smoke checklist after upgrade
 
 - Fresh install: onboarding succeeds.
 - Existing `1.5.x` data: apps and data reappear after startup.
-- Files: USB disk appears in sidebar.
-- Files: USB format action works.
+- **Full-host compose only** — Files: USB disk appears in sidebar; USB format action works.
 - Files: built-in editor opens text files.
 - Files: network mount to NAS works.
-- Settings > Network: hostname/static-IP flow loads.
-- Settings > File Sharing: SMB share from folder can be browsed from another machine.
+- **Full-host compose only** — Settings > Network: hostname/static-IP flow loads (host networking).
+- Settings > File Sharing: SMB share from folder can be browsed from another machine (may still log `systemctl` errors on shutdown in Docker without systemd).
 - Home: shortcut creation works.
-- Backups: can target external drive and run at least one backup.
+- Backups: can target path-based destinations (e.g. bind-mounted host paths); external **USB-as-block-device** backups align with **full-host** compose.
 - Restart test: no false storage error screen on reboot.
 
 ## Optional environment variables
@@ -199,9 +254,10 @@ Without these, external device detection, formatting, and network share workflow
 | Variable | Default | Description |
 | --- | --- | --- |
 | `UMBREL_IMAGE` | `shurikan117/tao-umbrel:1.7.3` | Image tag consumed by Compose |
-| `UMBREL_DATA` | `./umbrel` | Host path prefix for `…/kopia:/kopia` in [docker-compose.override.example.yml](docker-compose.override.example.yml) |
+| `UMBREL_DATA_HOST` | `./umbrel` | Host path mounted to `/data` in [`docker-compose.yml`](docker-compose.yml) |
+| `UMBREL_HTTP_PORT` | `80` | Host port published to container port 80 (e.g. `8088` on Unraid) |
 | `UMBREL_DATA_DIR` | `/data` | Data directory inside container |
-| `COMPOSE_FILE` | _(unset)_ | Colon-separated list of Compose files if not using `docker-compose.override.yml` |
+| `COMPOSE_FILE` | _(unset)_ | Colon-separated Compose file list (e.g. add [`docker-compose.full-host.example.yml`](docker-compose.full-host.example.yml)) |
 | `UMBRELD_RESTORE_SKIP_REBOOT` | _(unset)_ | Upstream umbreld: restore flow without reboot for debugging |
 | `TZ` | `Etc/UTC` | Container timezone |
 

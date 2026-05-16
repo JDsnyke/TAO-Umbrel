@@ -1,0 +1,14 @@
+--- a/packages/umbreld/source/modules/apps/apps.ts
++++ b/packages/umbreld/source/modules/apps/apps.ts
+@@ -33,6 +33,11 @@ export default class Apps {
+ 	// 0.5.4 installs didn't clean up properly on shutdown and it causes critical errors
+ 	// bringing up containers in 1.0.
+ 	async cleanDockerState() {
++		// TAO-Umbrel: host docker.sock sees every container on the daemon; never stop/rm all of them.
++		if (process.env.UMBREL_DISABLE_GLOBAL_DOCKER_CLEANUP === '1' || (await fse.pathExists('/.dockerenv'))) {
++			this.logger.log('Skipping global Docker cleanup (shared Docker / container mode)')
++			return
++		}
+ 		try {
+ 			const containerIds = (await $`docker ps -aq`).stdout.split('\n').filter(Boolean)
+ 			if (containerIds.length) {

@@ -6,12 +6,16 @@ WORKDIR /src
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     git \
+    patch \
     python3 \
     make \
     g++ \
   && rm -rf /var/lib/apt/lists/*
 
 RUN git clone --depth 1 --branch "${UMBREL_VERSION}" https://github.com/getumbrel/umbrel /src
+
+COPY docker/patches/umbreld-shared-docker-cleanup.patch /tmp/umbreld-shared-docker-cleanup.patch
+RUN patch -p1 -d /src < /tmp/umbreld-shared-docker-cleanup.patch
 
 WORKDIR /src/packages/umbreld
 RUN npm ci || npm install
@@ -76,5 +80,6 @@ COPY docker/systemctl-stub.sh /usr/local/bin/systemctl
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/rugix-ctrl /usr/local/bin/systemctl
 
 ENV UMBREL_VERSION=${UMBREL_VERSION}
+ENV UMBREL_DISABLE_GLOBAL_DOCKER_CLEANUP=1
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/usr/bin/tini", "-s", "/run/entry.sh"]

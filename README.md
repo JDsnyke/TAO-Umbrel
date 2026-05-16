@@ -97,6 +97,26 @@ GitHub Actions: see [`.github/workflows/docker-publish.yml`](.github/workflows/d
 | `UMBREL_DATA_DIR` | `/data` | Data directory inside the container |
 | `TZ` | `Etc/UTC` | Container timezone |
 
+## If logs show `Received SIGTERM` and `ExitCode: 0`
+
+That is a **graceful shutdown** (something sent SIGTERM)—often **not** a bad image.
+
+- **`restart: always`** in Compose (and **`--restart always`** in `docker run`) matches this repo. **`unless-stopped`** does **not** restart the container after a manual **`docker stop`** or a UI **Stop** on some hosts; align with **`always`** if you want automatic restarts after crashes.
+- Typical causes: Unraid **Stop** / **Apply** on the container, **`docker stop`**, foreground or console-attached runs, or closing a session that was tied to the container. Avoid **`-it`** for the long-running umbrel instance; use **`-d`**.
+- Confirm both mounts are present: **`UMBREL_DATA_HOST` → `/data`** and **`/var/run/docker.sock` → `/var/run/docker.sock`**.
+
+**Upstream behavior on shared Docker (Unraid, etc.):** umbreld 1.7.3 `cleanDockerState()` runs `docker ps -aq` then `docker stop` on **every** container on the socket. With a host `docker.sock`, that can stop **this** Umbrel container right after **“Cleaning up old containers…”**. Images built from this repo patch umbreld to skip that global cleanup in container/shared-socket mode (`UMBREL_DISABLE_GLOBAL_DOCKER_CLEANUP=1` and `/.dockerenv`). Rebuild and **`docker pull`** a new tag after changing the image.
+
+See who stopped the container (run while starting in another shell):
+
+```bash
+docker events --filter container=umbrel
+```
+
+If SIGTERM persists with no manual stop on an **old** image without the patch, try the same **`docker run`** line **without** `--pid host` once (some hosts behave oddly with host PID mode).
+
+Warnings like **`version` is obsolete** in upstream `legacy-compat/docker-compose.yml`, or **`Starting umbrelOS for Docker v1.5.0`** from the base image, are usually harmless noise if umbreld reports **v1.7.3**.
+
 ## License
 
 UmbrelOS is licensed under PolyForm Noncommercial 1.0.0. This image remains subject to the same license terms.

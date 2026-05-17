@@ -2,11 +2,16 @@ services:
   umbrel:
     image: ${UMBREL_IMAGE:-shurikan117/tao-umbrel:1.7.3}
     container_name: umbrel
+    hostname: umbrel
     pid: host
     ports:
       - "${UMBREL_HTTP_PORT:-80}:80"
     volumes:
       - ${UMBREL_DATA_HOST:-./umbrel}:/data
       - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      UMBREL_NETWORK_STORAGE_MODE: ${UMBREL_NETWORK_STORAGE_MODE:-auto}
+      UMBREL_LOG_LEVEL: ${UMBREL_LOG_LEVEL:-normal}
+      TZ: ${TZ:-Etc/UTC}
     restart: always
     stop_grace_period: 1m

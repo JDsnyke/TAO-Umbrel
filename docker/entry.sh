@@ -79,4 +79,5 @@ cd /opt/umbreld
 
 # umbreld Files resolves paths under the container /data mount; using the host bind source breaks realpath checks.
 data_dir="${UMBREL_DATA_DIR:-/data}"
-exec ./umbreld --data-directory "$data_dir" --log-level normal
+log_level="${UMBREL_LOG_LEVEL:-normal}"
+exec ./umbreld --data-directory "$data_dir" --log-level "$log_level"

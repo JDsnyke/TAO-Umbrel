@@ -29,6 +29,9 @@ services:
     volumes:
       - ${UMBREL_DATA_HOST:-./umbrel}:/data
       - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      UMBREL_NETWORK_STORAGE_MODE: ${UMBREL_NETWORK_STORAGE_MODE:-auto}
+      TZ: ${TZ:-Etc/UTC}
     restart: always
     stop_grace_period: 1m
 ```
@@ -49,6 +52,7 @@ docker run -d \
   --pid host \
   --restart always \
   --stop-timeout 60 \
+  -e UMBREL_NETWORK_STORAGE_MODE="${UMBREL_NETWORK_STORAGE_MODE:-auto}" \
   -p "${UMBREL_HTTP_PORT}:80" \
   -v "${UMBREL_DATA_HOST}:/data" \
   -v /var/run/docker.sock:/var/run/docker.sock \
@@ -95,7 +99,83 @@ GitHub Actions: see [`.github/workflows/docker-publish.yml`](.github/workflows/d
 | `UMBREL_DATA_HOST` | `./umbrel` | Host path mounted to `/data` |
 | `UMBREL_HTTP_PORT` | `80` | Host port mapped to container port 80 |
 | `UMBREL_DATA_DIR` | `/data` | Data directory inside the container |
+| `UMBREL_NETWORK_STORAGE_MODE` | `auto` | NAS/CIFS: `host` (mount on host first), `container` (umbreld mounts; you add `SYS_ADMIN`), or `auto` (host in Docker) |
 | `TZ` | `Etc/UTC` | Container timezone |
+
+## Network storage / NAS backups
+
+Umbrel mounts SMB shares for **Files → Network** and **Backups → NAS**. In Docker, in-container `mount -t cifs` usually needs **`CAP_SYS_ADMIN`** and still fails on many hosts (permission denied). Set behavior per deployment with **`UMBREL_NETWORK_STORAGE_MODE`**:
+
+| Mode | Who mounts SMB | Typical use |
+| --- | --- | --- |
+| **`host`** | You mount on the host under `{UMBREL_DATA_HOST}/network/{host}/{share}` | Unraid, NAS, any shared `docker.sock` host |
+| **`container`** | umbreld runs `mount -t cifs` | Dedicated box; add **`cap_add: [SYS_ADMIN]`** in *your* compose/run |
+| **`auto`** | `host` if `/.dockerenv`, else `container` | Default when unset |
+
+### Unraid / shared Docker (`host`)
+
+1. Set in Compose or `docker run` (see [`.env.local.example`](.env.local.example)):
+
+   ```bash
+   export UMBREL_NETWORK_STORAGE_MODE=host
+   ```
+
+2. On the **host**, mount the share at the path Umbrel expects (example for share `main` on `192.168.74.117`):
+
+   ```bash
+   mkdir -p /mnt/user/appdata/umbrel/network/192.168.74.117/main
+   mount -t cifs //192.168.74.117/main /mnt/user/appdata/umbrel/network/192.168.74.117/main \
+     -o credentials=/boot/config/umbrel-nas.creds,uid=1000,gid=1000,iocharset=utf8,nofail
+   ```
+
+   Credentials file: `username=...` and `password=...` (mode `600`). Use an Unraid user that can access the share.
+
+3. Verify: `mountpoint /mnt/user/appdata/umbrel/network/192.168.74.117/main`
+
+4. In Umbrel UI, **Add share** (same host and credentials). If the host mount is already up, umbreld accepts it; if not, you get a clear error instead of a generic mount failure.
+
+5. Persist the host mount via Unraid **User Scripts** (At Array Start) or `/boot/config/go`.
+
+### In-container CIFS (`container`)
+
+Not enabled in the default [`docker-compose.yml`](docker-compose.yml). Example override:
+
+```yaml
+services:
+  umbrel:
+    cap_add:
+      - SYS_ADMIN
+    environment:
+      UMBREL_NETWORK_STORAGE_MODE: container
+```
+
+Pull a new image after updates; host-mount mode does not require extra container capabilities.
+
+## If Files shows "The path is outside the allowed directory"
+
+Built-in **Files → Home / Apps** can fail with this message when umbreld was started with the **host** path of the `/data` bind mount as `--data-directory` (dockur default) while path checks resolve under the container mount **`/data`**. Images from this repo ship a patched [`docker/entry.sh`](docker/entry.sh) that starts umbreld with **`UMBREL_DATA_DIR`** (default **`/data`**), which must match your volume target (`UMBREL_DATA_HOST` → `/data`).
+
+After pulling a build that includes the fix, recreate the container, then verify:
+
+```bash
+# Should include --data-directory /data (not /mnt/user/... or other host source path)
+docker exec umbrel tr '\0' ' ' </proc/1/cmdline; echo
+```
+
+Then open **Files → Home** and **Files → Apps** in the UI. Older images without the patched entry script need a **`docker pull`** and recreate; docs-only changes do not fix a running container.
+
+## If Settings → Device info shows no CPU
+
+RAM and storage come from `/proc/meminfo` and `df`; the CPU model uses **`lscpu`** (`util-linux`) with a **`/proc/cpuinfo`** fallback in patched images. Older images without `util-linux` may show a blank CPU line.
+
+After pulling a current build:
+
+```bash
+docker exec umbrel lscpu | grep 'Model name'
+docker exec umbrel sh -c 'grep -m1 "model name" /proc/cpuinfo'
+```
+
+Refresh **Settings → Device info**. Live CPU **usage** % is a separate code path (`top`); this section is only the CPU **model** string.
 
 ## If logs show `Received SIGTERM` and `ExitCode: 0`
 

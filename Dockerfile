@@ -15,7 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN git clone --depth 1 --branch "${UMBREL_VERSION}" https://github.com/getumbrel/umbrel /src
 
 COPY docker/patches/umbreld-shared-docker-cleanup.patch /tmp/umbreld-shared-docker-cleanup.patch
-RUN patch -p1 -d /src < /tmp/umbreld-shared-docker-cleanup.patch
+COPY docker/patches/umbreld-network-storage-host-mount.patch /tmp/umbreld-network-storage-host-mount.patch
+COPY docker/patches/umbreld-device-cpu-fallback.patch /tmp/umbreld-device-cpu-fallback.patch
+RUN patch -p1 -d /src < /tmp/umbreld-shared-docker-cleanup.patch \
+  && patch -p1 -d /src < /tmp/umbreld-network-storage-host-mount.patch \
+  && patch -p1 -d /src < /tmp/umbreld-device-cpu-fallback.patch
 
 WORKDIR /src/packages/umbreld
 RUN npm ci || npm install
@@ -41,9 +45,11 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # Kopia + FUSE for umbreld 1.7.3 backups (upstream umbrelos.Dockerfile); base image may lack these.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    cifs-utils \
     curl \
     fuse3 \
     bindfs \
+    util-linux \
   && rm -rf /var/lib/apt/lists/*
 
 RUN KOPIA_ARCH="$([ "${TARGETARCH}" = "arm64" ] && echo "arm64" || echo "x64")" && \
@@ -75,11 +81,13 @@ RUN mkdir -p /usr/lib /opt/umbrel \
   && ln -snf /opt/umbreld /opt/umbrel/umbreld
 
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY docker/entry.sh /run/entry.sh
 COPY docker/rugix-ctrl-stub.sh /usr/local/bin/rugix-ctrl
 COPY docker/systemctl-stub.sh /usr/local/bin/systemctl
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/rugix-ctrl /usr/local/bin/systemctl
+RUN chmod +x /usr/local/bin/entrypoint.sh /run/entry.sh /usr/local/bin/rugix-ctrl /usr/local/bin/systemctl
 
 ENV UMBREL_VERSION=${UMBREL_VERSION}
+ENV UMBREL_DATA_DIR=/data
 ENV UMBREL_DISABLE_GLOBAL_DOCKER_CLEANUP=1
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/usr/bin/tini", "-s", "/run/entry.sh"]

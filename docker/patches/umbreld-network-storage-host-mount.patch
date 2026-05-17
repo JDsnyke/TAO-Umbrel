@@ -1,0 +1,34 @@
+--- a/packages/umbreld/source/modules/files/network-storage.ts	2026-05-17 08:17:56
++++ b/packages/umbreld/source/modules/files/network-storage.ts	2026-05-17 08:18:11
+@@ -134,7 +134,31 @@
+ 		// Ensure mount directory exists
+ 		const systemMountPath = this.#umbreld.files.virtualToSystemPathUnsafe(share.mountPath)
+ 		await fse.ensureDir(systemMountPath)
++
++		if (await this.#isMounted(share)) {
++			this.mountedShares.add(share.mountPath)
++			this.logger.log(`Network share already mounted: ${share.mountPath}`)
++			return
++		}
++
++		const modeSetting = (process.env.UMBREL_NETWORK_STORAGE_MODE || 'auto').toLowerCase()
++		let mountMode: 'host' | 'container'
++		if (modeSetting === 'host' || modeSetting === 'container') {
++			mountMode = modeSetting
++		} else if (modeSetting === 'auto') {
++			mountMode = (await fse.pathExists('/.dockerenv')) ? 'host' : 'container'
++		} else {
++			throw new Error(
++				`Invalid UMBREL_NETWORK_STORAGE_MODE "${process.env.UMBREL_NETWORK_STORAGE_MODE}" (use host, container, or auto)`,
++			)
++		}
+ 
++		if (mountMode === 'host') {
++			throw new Error(
++				`Network share is not mounted at ${systemMountPath}. With UMBREL_NETWORK_STORAGE_MODE=host, mount //${share.host}/${share.share} on the host at ${systemMountPath} (under your /data bind mount), then add the share in Umbrel. See TAO-Umbrel README.`,
++			)
++		}
++
+ 		let credentialsDirectory: string | undefined
+ 		try {
+ 			// Mount the network share

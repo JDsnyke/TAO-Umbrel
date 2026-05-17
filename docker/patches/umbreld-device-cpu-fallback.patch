@@ -1,0 +1,74 @@
+--- a/packages/umbreld/source/modules/system-ng/device.ts	2026-05-17 09:58:01
++++ b/packages/umbreld/source/modules/system-ng/device.ts	2026-05-17 09:58:01
+@@ -19,6 +19,22 @@
+ 	return disk.rota ? 'HDD' : 'SSD'
+ }
+ 
++function formatCpuModelName(rawName: string, vendorId?: string): string {
++	const modelName = rawName
++		.replace(/\(R\)/gi, '®')
++		.replace(/\(TM\)/gi, '™')
++		.replace(/\(C\)/gi, '©')
++		.replace(/CPU/g, '')
++		.replace(/\s+/g, ' ')
++		.trim()
++
++	const vendorMap: Record<string, string> = {GenuineIntel: 'Intel', AuthenticAMD: 'AMD', ARM: 'ARM'}
++	const vendor = vendorMap[vendorId ?? ''] ?? ''
++
++	if (vendor && !modelName.includes(vendor)) return `${vendor} ${modelName}`
++	return modelName
++}
++
+ export default class Device {
+ 	#umbreld: Umbreld
+ 	logger: Umbreld['logger']
+@@ -56,29 +72,30 @@
+ 			// lscpu normalizes CPU info across x86 and arm64 (unlike /proc/cpuinfo which varies by architecture)
+ 			const {stdout} = await $`lscpu`
+ 			const rawName = stdout.match(/^Model name:\s*(.+)$/m)?.[1]?.trim()
+-			if (!rawName) return ''
++			if (rawName) {
++				const vendorId = stdout.match(/^Vendor ID:\s*(.+)$/m)?.[1]?.trim()
++				return formatCpuModelName(rawName, vendorId)
++			}
++		} catch {
++			// fall through to /proc/cpuinfo (common in Docker without util-linux)
++		}
+ 
+-			// Clean up CPUID brand string artifacts: (R) → ®, (TM) → ™, (C) → ©, strip "CPU"
+-			const modelName = rawName
+-				.replace(/\(R\)/gi, '®')
+-				.replace(/\(TM\)/gi, '™')
+-				.replace(/\(C\)/gi, '©')
+-				.replace(/CPU/g, '')
+-				.replace(/\s+/g, ' ')
+-				.trim()
++		return await this.#getCpuFromProcCpuinfo()
++	}
+ 
+-			const vendorId = stdout.match(/^Vendor ID:\s*(.+)$/m)?.[1]?.trim()
+-			// Map vendor IDs to human-readable names (GenuineIntel → Intel, AuthenticAMD → AMD, ARM → ARM)
+-			const vendorMap: Record<string, string> = {GenuineIntel: 'Intel', AuthenticAMD: 'AMD', ARM: 'ARM'}
+-			const vendor = vendorMap[vendorId ?? ''] ?? ''
++	async #getCpuFromProcCpuinfo(): Promise<string> {
++		try {
++			const cpuInfo = await fse.readFile('/proc/cpuinfo', 'utf8')
++			const rawName =
++				cpuInfo.match(/^model name\s*:\s*(.+)$/im)?.[1]?.trim() ||
++				cpuInfo.match(/^Model\s*:\s*(.+)$/im)?.[1]?.trim()
++			if (!rawName) return ''
+ 
+-			// Prefix vendor if not already in model name (e.g. "Intel® N150" already contains "Intel")
+-			if (vendor && !modelName.includes(vendor)) return `${vendor} ${modelName}`
+-			return modelName
++			const vendorId = cpuInfo.match(/^vendor_id\s*:\s*(.+)$/im)?.[1]?.trim()
++			return formatCpuModelName(rawName, vendorId)
+ 		} catch {
+-			// Non-fatal, return empty string
++			return ''
+ 		}
+-		return ''
+ 	}
+ 
+ 	async #getMemory(): Promise<{memorySize: number | null; memoryType: string}> {

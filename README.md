@@ -163,8 +163,9 @@ Built-in **Files → Home / Apps** can fail with this message when umbreld was s
 After pulling a build that includes the fix, recreate the container, then verify:
 
 ```bash
-# Should include --data-directory /data (not /mnt/user/... or other host source path)
-docker exec umbrel tr '\0' ' ' </proc/1/cmdline; echo
+# dataDirectory: /data in logs (not /mnt/user/...); or umbreld cmdline via pgrep (PID 1 is tini)
+docker logs umbrel 2>&1 | grep 'dataDirectory:' | tail -1
+docker exec umbrel sh -c 'pid=$(pgrep -xo umbreld); tr "\0" " " < /proc/$pid/cmdline; echo'
 ```
 
 Then open **Files → Home** and **Files → Apps** in the UI. Older images without the patched entry script need a **`docker pull`** and recreate; docs-only changes do not fix a running container.
@@ -206,19 +207,20 @@ Warnings like **`version` is obsolete** in upstream `legacy-compat/docker-compos
 
 App installs need a **current image built from this repo** (`shurikan117/tao-umbrel:1.7.3` or a **`dev-<sha>`** tag from CI on `dev`). Stock **`tao9317/tao-umbrel:latest`** alone does not include the umbreld patches or patched [`docker/entry.sh`](docker/entry.sh).
 
-**Older CI tags (e.g. `dev-e8e796a`) are missing fixes** added after that commit: `--data-directory /data`, skip global Docker cleanup on shared `docker.sock`, and bundled umbreld patches. Pull a newer **`dev-<sha>`** after pushing to `dev`, or rebuild locally.
+**Older images are missing fixes** (e.g. before stable `umbrel_main_network`): `--data-directory /data`, skip global Docker cleanup on shared `docker.sock`, and **do not** run `docker network rm` on every start (that disconnects `auth` / `tor_proxy`). After CI on `dev`, pull **`shurikan117/tao-umbrel:dev`** (moving) or **`dev-<7-char-git-sha>`** (pinned).
 
 Endless **`WS rpc backups.backupProgress`** / **`widget.data`** lines with **`logLevel: verbose`** are **dashboard polling**, not install errors. Use **`UMBREL_LOG_LEVEL=normal`** (default) to reduce noise.
 
 ### Verify the running container
 
 ```bash
-docker inspect umbrel --format '{{.Config.Image}}'
+docker inspect umbrel --format '{{.Config.Image}} {{.RestartCount}} restarts'
 
-# Must include --data-directory /data (not /mnt/user/appdata/umbrel or other host source path)
-docker exec umbrel tr '\0' ' ' </proc/1/cmdline; echo
+# PID 1 is usually tini, not umbreld — read umbreld's cmdline or startup log:
+docker exec umbrel sh -c 'pid=$(pgrep -xo umbreld 2>/dev/null || pgrep -n umbreld); tr "\0" " " < /proc/$pid/cmdline; echo'
+docker logs umbrel 2>&1 | grep 'dataDirectory:' | tail -1
 
-docker logs umbrel 2>&1 | grep -E 'Skipping global Docker cleanup|Cleaning up old containers|dataDirectory:|Installing app|Failed to install|app environment'
+docker logs umbrel 2>&1 | grep -E 'Skipping global Docker cleanup|Cleaning up old containers|dataDirectory:|Installing app|Failed to install|app environment|Failed to start app environment'
 
 docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'umbrel|auth|tor_proxy'
 
@@ -227,9 +229,10 @@ docker exec umbrel sh -c 'touch /data/.w && rm /data/.w && ls -la /data/app-stor
 
 **Pass criteria:**
 
-- `--data-directory /data` in the cmdline
-- Startup log contains **`Skipping global Docker cleanup`** (not **`Cleaning up old containers...`** followed by exit)
+- Latest log line shows **`dataDirectory: /data`** (and umbreld cmdline includes **`--data-directory /data`** if you use `pgrep`)
+- Startup log contains **`Skipping global Docker cleanup`** once per boot (not **`Cleaning up old containers...`**). Dozens of identical **Skipping** lines usually mean the container is **restart-looping** — check **`RestartCount`** and logs for **`Failed to start app environment`**
 - **`auth`** and **`tor_proxy`** containers exist and are **Up**
+- **`docker network inspect umbrel_main_network`** stays present across Umbrel restarts (entry script must not remove it each boot)
 - `/data` is writable; **`app-stores/`** populated
 
 While clicking **Install** in the UI:
@@ -241,8 +244,9 @@ docker logs -f umbrel 2>&1 | grep -iE 'Installing app|Failed to install|pull|com
 ### Recreate on Unraid with a current image
 
 ```bash
-docker rm -f umbrel 2>/dev/null
-docker pull shurikan117/tao-umbrel:dev-<7-char-sha>   # or :1.7.3 after Hub publish
+docker rm -f umbrel auth tor_proxy 2>/dev/null
+docker pull shurikan117/tao-umbrel:dev
+# Or pin a CI build: docker pull shurikan117/tao-umbrel:dev-<7-char-sha>
 
 docker run -d \
   --name umbrel \
@@ -253,7 +257,7 @@ docker run -d \
   -p 8088:80 \
   -v /mnt/user/appdata/umbrel:/data \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  shurikan117/tao-umbrel:dev-<7-char-sha>
+  shurikan117/tao-umbrel:dev
 ```
 
 Re-run the verification commands above, then try installing one small app. A new **`<app>_…`** container should appear in **`docker ps`**.
@@ -263,8 +267,8 @@ Re-run the verification commands above, then try installing one small app. A new
 Umbreld and app containers expect uid **1000** for tor and many app volumes. On the host:
 
 ```bash
-chown -R 1000:1000 /mnt/user/appdata/umbrel
-chmod -R u+rwX /mnt/user/appdata/umbrel
+chown -R 1000:1000 /mnt/user/appdata/umbrel/tor /mnt/user/appdata/umbrel/app-stores /mnt/user/appdata/umbrel/app-data
+chmod -R u+rwX /mnt/user/appdata/umbrel/tor /mnt/user/appdata/umbrel/app-stores /mnt/user/appdata/umbrel/app-data
 ```
 
 Avoid read-only or **`root_squash`** CIFS for the Umbrel appdata share if installs fail with **`EACCES`**.

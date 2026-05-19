@@ -100,6 +100,10 @@ jobs:
           IMAGE="$(printf '%s' "$IMAGE" | tr '[:upper:]' '[:lower:]')"
 
           TAGS="${IMAGE}:${VERSION}"
+          if [ "${REF_TYPE_EVENT:-}" = "branch" ] && [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            DEV_SHA="${GITHUB_SHA:0:7}"
+            TAGS="${TAGS},${IMAGE}:dev-${DEV_SHA}"
+          fi
           if [ "$PUSH_LATEST" = "true" ]; then
             TAGS="${TAGS},${IMAGE}:latest"
           fi

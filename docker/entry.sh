@@ -18,7 +18,7 @@ if [ ! -S /var/run/docker.sock ]; then
 fi
 
 net="umbrel_main_network"
-docker network rm "$net" &>/dev/null || true
+# Do not remove the network on start — auth, tor_proxy, and apps need a stable umbrel_main_network.
 
 if ! docker network inspect "$net" &>/dev/null; then
   if ! docker network create --driver=bridge --subnet="10.21.0.0/16" "$net" >/dev/null; then

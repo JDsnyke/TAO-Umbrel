@@ -17,9 +17,11 @@ RUN git clone --depth 1 --branch "${UMBREL_VERSION}" https://github.com/getumbre
 COPY docker/patches/umbreld-shared-docker-cleanup.patch /tmp/umbreld-shared-docker-cleanup.patch
 COPY docker/patches/umbreld-network-storage-host-mount.patch /tmp/umbreld-network-storage-host-mount.patch
 COPY docker/patches/umbreld-device-cpu-fallback.patch /tmp/umbreld-device-cpu-fallback.patch
+COPY docker/patches/umbreld-apps-skip-cleanup-retry.patch /tmp/umbreld-apps-skip-cleanup-retry.patch
 RUN patch -p1 -d /src < /tmp/umbreld-shared-docker-cleanup.patch \
   && patch -p1 -d /src < /tmp/umbreld-network-storage-host-mount.patch \
-  && patch -p1 -d /src < /tmp/umbreld-device-cpu-fallback.patch
+  && patch -p1 -d /src < /tmp/umbreld-device-cpu-fallback.patch \
+  && patch -p1 -d /src < /tmp/umbreld-apps-skip-cleanup-retry.patch
 
 WORKDIR /src/packages/umbreld
 RUN npm ci || npm install

@@ -1,0 +1,18 @@
+--- a/packages/umbreld/source/modules/apps/apps.ts
++++ b/packages/umbreld/source/modules/apps/apps.ts
+@@ -150,11 +150,14 @@ export default class Apps {
+ 		try {
+ 			try {
+ 				await appEnvironment(this.#umbreld, 'up')
+ 			} catch (error) {
+ 				this.logger.error(`Failed to start app environment`, error)
+-				this.logger.log('Attempting to clean Docker state before retrying...')
+-				await this.cleanDockerState()
++				// TAO-Umbrel: never run global cleanup retry on shared host docker.sock / in container.
++				if (!(process.env.UMBREL_DISABLE_GLOBAL_DOCKER_CLEANUP === '1' || (await fse.pathExists('/.dockerenv')))) {
++					this.logger.log('Attempting to clean Docker state before retrying...')
++					await this.cleanDockerState()
++				}
+ 			}
+ 			await pRetry(() => appEnvironment(this.#umbreld, 'up'), {
+ 				onFailedAttempt: (error) => {

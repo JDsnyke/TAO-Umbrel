@@ -1,0 +1,22 @@
+--- a/packages/umbreld/source/modules/dbus/dbus.ts
++++ b/packages/umbreld/source/modules/dbus/dbus.ts
+@@ -3,6 +3,7 @@
+
+ import dbus from '@homebridge/dbus-native'
+ import {throttle} from 'es-toolkit'
++import fse from 'fs-extra'
+ import type Umbreld from '../../index.js'
+
+ export default class Dbus {
+@@ -25,6 +26,11 @@ export default class Dbus {
+ 	}
+
+ 	async addDiskEventListeners() {
++		// TAO-Umbrel: no systemd/dbus disk hotplug in Docker; systemBus() crashes Node if missing.
++		if (await fse.pathExists('/.dockerenv')) {
++			this.logger.log('Skipping disk event listeners in Docker (no system dbus)')
++			return
++		}
+ 		this.logger.log('Attaching disk event listeners')
+
+ 		// Create throttled event emitter since we often get lots of events at once

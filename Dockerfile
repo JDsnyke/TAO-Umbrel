@@ -18,10 +18,12 @@ COPY docker/patches/umbreld-shared-docker-cleanup.patch /tmp/umbreld-shared-dock
 COPY docker/patches/umbreld-network-storage-host-mount.patch /tmp/umbreld-network-storage-host-mount.patch
 COPY docker/patches/umbreld-device-cpu-fallback.patch /tmp/umbreld-device-cpu-fallback.patch
 COPY docker/patches/umbreld-apps-skip-cleanup-retry.patch /tmp/umbreld-apps-skip-cleanup-retry.patch
+COPY docker/patches/umbreld-dbus-skip-docker.patch /tmp/umbreld-dbus-skip-docker.patch
 RUN patch -p1 -d /src < /tmp/umbreld-shared-docker-cleanup.patch \
   && patch -p1 -d /src < /tmp/umbreld-network-storage-host-mount.patch \
   && patch -p1 -d /src < /tmp/umbreld-device-cpu-fallback.patch \
-  && patch -p1 -d /src < /tmp/umbreld-apps-skip-cleanup-retry.patch
+  && patch -p1 -d /src < /tmp/umbreld-apps-skip-cleanup-retry.patch \
+  && patch -p1 -d /src < /tmp/umbreld-dbus-skip-docker.patch
 
 WORKDIR /src/packages/umbreld
 RUN npm ci || npm install

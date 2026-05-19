@@ -207,7 +207,9 @@ Warnings like **`version` is obsolete** in upstream `legacy-compat/docker-compos
 
 App installs need a **current image built from this repo** (`shurikan117/tao-umbrel:1.7.3` or a **`dev-<sha>`** tag from CI on `dev`). Stock **`tao9317/tao-umbrel:latest`** alone does not include the umbreld patches or patched [`docker/entry.sh`](docker/entry.sh).
 
-**Older images are missing fixes** (e.g. before stable `umbrel_main_network`): `--data-directory /data`, skip global Docker cleanup on shared `docker.sock`, and **do not** run `docker network rm` on every start (that disconnects `auth` / `tor_proxy`). After CI on `dev`, pull **`shurikan117/tao-umbrel:dev`** (moving) or **`dev-<7-char-git-sha>`** (pinned).
+**Older images are missing fixes** (e.g. before stable `umbrel_main_network` or dbus skip): `--data-directory /data`, skip global Docker cleanup on shared `docker.sock`, **do not** run `docker network rm` on every start (that disconnects `auth` / `tor_proxy`), and skip dbus disk listeners in Docker (see [`docker/patches/umbreld-dbus-skip-docker.patch`](docker/patches/umbreld-dbus-skip-docker.patch)). After CI on `dev`, pull **`shurikan117/tao-umbrel:dev`** (moving) or **`dev-<7-char-git-sha>`** (pinned).
+
+If logs show **`ENOENT /var/run/dbus/system_bus_socket`** and umbreld restarts in a loop before **`auth`** / **`tor_proxy`** appear, pull an image that includes the dbus Docker skip patch. After a good start, **`docker ps`** should list **`auth`** and **`tor_proxy`** as **Up** within about a minute.
 
 Endless **`WS rpc backups.backupProgress`** / **`widget.data`** lines with **`logLevel: verbose`** are **dashboard polling**, not install errors. Use **`UMBREL_LOG_LEVEL=normal`** (default) to reduce noise.
 
@@ -220,7 +222,7 @@ docker inspect umbrel --format '{{.Config.Image}} {{.RestartCount}} restarts'
 docker exec umbrel sh -c 'pid=$(pgrep -xo umbreld 2>/dev/null || pgrep -n umbreld); tr "\0" " " < /proc/$pid/cmdline; echo'
 docker logs umbrel 2>&1 | grep 'dataDirectory:' | tail -1
 
-docker logs umbrel 2>&1 | grep -E 'Skipping global Docker cleanup|Cleaning up old containers|dataDirectory:|Installing app|Failed to install|app environment|Failed to start app environment'
+docker logs umbrel 2>&1 | grep -E 'Skipping global Docker cleanup|Skipping disk event listeners|Cleaning up old containers|dataDirectory:|Installing app|Failed to install|app environment|Failed to start app environment'
 
 docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'umbrel|auth|tor_proxy'
 
@@ -230,7 +232,8 @@ docker exec umbrel sh -c 'touch /data/.w && rm /data/.w && ls -la /data/app-stor
 **Pass criteria:**
 
 - Latest log line shows **`dataDirectory: /data`** (and umbreld cmdline includes **`--data-directory /data`** if you use `pgrep`)
-- Startup log contains **`Skipping global Docker cleanup`** once per boot (not **`Cleaning up old containers...`**). Dozens of identical **Skipping** lines usually mean the container is **restart-looping** — check **`RestartCount`** and logs for **`Failed to start app environment`**
+- Log contains **`Skipping disk event listeners in Docker`** once per boot (dbus patch active)
+- Startup log contains **`Skipping global Docker cleanup`** once per boot (not **`Cleaning up old containers...`**). Dozens of identical **Skipping** lines usually mean the container is **restart-looping** — check **`RestartCount`** and logs for **`Failed to start app environment`** or dbus **`ENOENT`**
 - **`auth`** and **`tor_proxy`** containers exist and are **Up**
 - **`docker network inspect umbrel_main_network`** stays present across Umbrel restarts (entry script must not remove it each boot)
 - `/data` is writable; **`app-stores/`** populated

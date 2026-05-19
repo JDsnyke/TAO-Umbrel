@@ -207,7 +207,7 @@ Warnings like **`version` is obsolete** in upstream `legacy-compat/docker-compos
 
 App installs need a **current image built from this repo** (`shurikan117/tao-umbrel:1.7.3` or a **`dev-<sha>`** tag from CI on `dev`). Stock **`tao9317/tao-umbrel:latest`** alone does not include the umbreld patches or patched [`docker/entry.sh`](docker/entry.sh).
 
-**Older images are missing fixes** (e.g. before stable `umbrel_main_network` or dbus skip): `--data-directory /data`, skip global Docker cleanup on shared `docker.sock`, **do not** run `docker network rm` on every start (that disconnects `auth` / `tor_proxy`), and skip dbus disk listeners in Docker (see [`docker/patches/umbreld-dbus-skip-docker.patch`](docker/patches/umbreld-dbus-skip-docker.patch)). After CI on `dev`, pull **`shurikan117/tao-umbrel:dev`** (moving) or **`dev-<7-char-git-sha>`** (pinned).
+**Older images are missing fixes** (e.g. before stable `umbrel_main_network`, **external compose network**, or dbus skip): `--data-directory /data`, skip global Docker cleanup on shared `docker.sock`, **do not** run `docker network rm` on every start (that disconnects `auth` / `tor_proxy`), compose **`umbrel_main_network` as external** (see [`docker/patches/umbreld-docker-network-external.patch`](docker/patches/umbreld-docker-network-external.patch)), and skip dbus disk listeners in Docker (see [`docker/patches/umbreld-dbus-skip-docker.patch`](docker/patches/umbreld-dbus-skip-docker.patch)). After CI on `dev`, pull **`shurikan117/tao-umbrel:dev`** (moving) or **`dev-<7-char-git-sha>`** (pinned).
 
 If logs show **`ENOENT /var/run/dbus/system_bus_socket`** and umbreld restarts in a loop before **`auth`** / **`tor_proxy`** appear, pull an image that includes the dbus Docker skip patch. After a good start, **`docker ps`** should list **`auth`** and **`tor_proxy`** as **Up** within about a minute.
 
@@ -233,7 +233,7 @@ docker exec umbrel sh -c 'touch /data/.w && rm /data/.w && ls -la /data/app-stor
 
 - Latest log line shows **`dataDirectory: /data`** (and umbreld cmdline includes **`--data-directory /data`** if you use `pgrep`)
 - Log contains **`Skipping disk event listeners in Docker`** once per boot (dbus patch active)
-- Startup log contains **`Skipping global Docker cleanup`** once per boot (not **`Cleaning up old containers...`**). Dozens of identical **Skipping** lines usually mean the container is **restart-looping** — check **`RestartCount`** and logs for **`Failed to start app environment`** or dbus **`ENOENT`**
+- Startup log contains **`Skipping global Docker cleanup`** once per boot (not **`Cleaning up old containers...`**). Dozens of identical **Skipping** lines usually mean the container is **restart-looping** — check **`RestartCount`** and logs for **`Failed to start app environment`** (often compose network label / missing external network patch), dbus **`ENOENT`**, or **`EACCES`** on **`app-data`**
 - **`auth`** and **`tor_proxy`** containers exist and are **Up**
 - **`docker network inspect umbrel_main_network`** stays present across Umbrel restarts (entry script must not remove it each boot)
 - `/data` is writable; **`app-stores/`** populated
@@ -267,14 +267,63 @@ Re-run the verification commands above, then try installing one small app. A new
 
 ### If `/data` permission errors appear
 
-Umbreld and app containers expect uid **1000** for tor and many app volumes. On the host:
+Umbreld and app containers expect uid **1000** for tor, app stores, and app data (bitcoin, lightning/LND, electrs, etc.). On Unraid and similar hosts, appdata often starts as **`root:users`** (gid **100**), which is **not** the same as container uid **1000**—bitcoin may log **`EACCES mkdir '/data/app'`**, and **`lightning_lnd_1`** may **Restart** even when **`tls.cert`** already exists (dir mode **`755`** owned by root).
+
+**If 1.7.3 was already working** and problems appeared **after a `chown`/`chmod` pass or restart**, treat this as a **permissions regression** first—not “1.7.3 cannot run in Docker.”
+
+**Recovery (containers stopped first):**
 
 ```bash
-chown -R 1000:1000 /mnt/user/appdata/umbrel/tor /mnt/user/appdata/umbrel/app-stores /mnt/user/appdata/umbrel/app-data
-chmod -R u+rwX /mnt/user/appdata/umbrel/tor /mnt/user/appdata/umbrel/app-stores /mnt/user/appdata/umbrel/app-data
+UMBREL_DATA_HOST=/path/to/umbrel-data   # e.g. /mnt/user/appdata/umbrel
+
+docker stop umbrel
+docker stop bitcoin_app_1 lightning_lnd_1 electrs_electrs_1 2>/dev/null || true
+
+chown -R 1000:1000 "$UMBREL_DATA_HOST"
+chmod -R u+rwX "$UMBREL_DATA_HOST"
+
+# Spot-check (expect 1000:1000, not root users)
+stat -c '%u:%g %a' "$UMBREL_DATA_HOST/app-data/lightning/data/lnd"
+ls -la "$UMBREL_DATA_HOST/app-data/bitcoin/data/bitcoin" | head -3
+
+docker start umbrel
 ```
 
+Prefer **one recursive pass on the full `UMBREL_DATA_HOST` bind mount** (not only `tor` or a single app folder) so no subtree stays **`root:users`**. Do **not** run `chown` while app containers are writing. Do **not** delete **`app-data/lightning/data/lnd`** if **`tls.cert`** is present unless you intend to reset the wallet.
+
 Avoid read-only or **`root_squash`** CIFS for the Umbrel appdata share if installs fail with **`EACCES`**.
+
+### If logs show `Failed to start app environment` (compose network label)
+
+After **`docker container prune`** or recreating the **`umbrel`** container, umbreld may log:
+
+```text
+network umbrel_main_network was found but has incorrect label com.docker.compose.network set to "" (expected: "default")
+Failed to start app environment
+```
+
+[`docker/entry.sh`](docker/entry.sh) creates **`umbrel_main_network`** with plain **`docker network create`** (no Compose labels). umbreld 1.7.3 **`legacy-compat/docker-compose.yml`** must treat that network as **external** (see [`docker/patches/umbreld-docker-network-external.patch`](docker/patches/umbreld-docker-network-external.patch)). **Do not** `docker network rm umbrel_main_network` on each boot—that disconnects **`auth`** / **`tor_proxy`**.
+
+**Avoid `docker container prune`** on Umbrel hosts; it removes stopped app containers and makes recovery harder.
+
+After pulling an image that includes the network patch, recreate **`umbrel`** (same mounts as your working run), then verify:
+
+```bash
+docker logs umbrel 2>&1 | tail -30
+docker ps --format '{{.Names}}\t{{.Status}}' | grep -E 'auth|tor_proxy|bitcoin_app|lightning_lnd'
+```
+
+Expect **`auth`** and **`tor_proxy` Up**, no repeating **`Failed to start app environment`**. Installed apps under **`/data/app-data/`** may take several minutes to come back after prune.
+
+### App store `Manifest parsing … ENOENT` on boot
+
+Hundreds of paired **`ENOENT`** / **`invalid manifest`** lines during store clone can be a **transient race** if the store is healthy on disk:
+
+```bash
+docker exec umbrel sh -c 'find /data/app-stores/getumbrel-umbrel-apps-github-* -name umbrel-app.yml 2>/dev/null | wc -l'
+```
+
+Roughly **300+** files and a sample app path present usually means the catalog is OK; focus on **app-data permissions** and **app environment** (`auth` / network) if the stack is down.
 
 ## License
 

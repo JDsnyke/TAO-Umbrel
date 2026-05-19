@@ -1,0 +1,11 @@
+--- a/packages/umbreld/source/modules/apps/legacy-compat/docker-compose.yml
++++ b/packages/umbreld/source/modules/apps/legacy-compat/docker-compose.yml
+@@ -45,7 +45,4 @@
+ networks:
+   default:
+     name: umbrel_main_network
+-    ipam:
+-      driver: default
+-      config:
+-        - subnet: '$NETWORK_IP/16'
++    external: true
